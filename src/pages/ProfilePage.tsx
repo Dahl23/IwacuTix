@@ -26,6 +26,7 @@ import {
   Server
 } from 'lucide-react';
 import { AuthModal } from '../components/AuthModal';
+import { PWAInstallButton } from '../components/PWAInstallButton';
 import { getStoredAccessToken, API_BASE_URL } from '../services/apiClient';
 
 export const ProfilePage: React.FC = () => {
@@ -197,6 +198,9 @@ export const ProfilePage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* PWA Mobile App Installation Card */}
+        <PWAInstallButton variant="profile" />
 
         {/* ROLE-SPECIFIC ACTION PANELS */}
 

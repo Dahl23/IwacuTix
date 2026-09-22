@@ -5,10 +5,13 @@ import {
   Home, Search, Ticket, User as UserIcon, Bell, 
   ShoppingBag, Sparkles, LogOut, Menu, X, PlusCircle,
   TrendingUp, Compass, Heart, Settings, ShieldCheck, HelpCircle,
-  Clock, Megaphone, CheckCheck, Maximize, Minimize
+  Clock, Megaphone, CheckCheck, Maximize, Minimize, Download
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { IwacuTixLogo } from './IwacuTixLogo';
+import { PWAInstallButton } from './PWAInstallButton';
+import { PWAInstallBanner } from './PWAInstallBanner';
+import { OfflineIndicator } from './OfflineIndicator';
 
 interface PhoneContainerProps {
   children: React.ReactNode;
@@ -79,6 +82,8 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col w-full antialiased text-slate-800 font-sans">
+      <OfflineIndicator />
+      <PWAInstallBanner />
       
       {/* ================= MODERN RESPONSIVE HEADER / NAVBAR ================= */}
       <header className="sticky top-0 z-50 w-full bg-white/75 bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-orange-500/15 backdrop-blur-xl border-b border-orange-300/40 shadow-sm shadow-orange-500/5 shrink-0">
@@ -175,6 +180,9 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
               )}
             </Link>
 
+            {/* In-App PWA Install Button */}
+            <PWAInstallButton variant="header" />
+
             {/* User Profile Avatar with small greeting on Desktop */}
             <Link
               to="/profil"
@@ -225,7 +233,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
               );
             })}
             
-            <div className="pt-2 border-t border-orange-100">
+            <div className="pt-2 border-t border-orange-100 space-y-2">
               <Link
                 to="/organisateur/creer"
                 className={`flex items-center gap-3 p-3 rounded-xl font-bold text-xs transition-all ${
@@ -237,6 +245,8 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                 <PlusCircle className="w-4.5 h-4.5 text-emerald-600" />
                 <span className="text-emerald-800">Créer un événement</span>
               </Link>
+              
+              <PWAInstallButton variant="profile" />
             </div>
           </div>
         )}
