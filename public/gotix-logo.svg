@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="ticketGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFC800" />
+      <stop offset="45%" stop-color="#FF9000" />
+      <stop offset="100%" stop-color="#FF4500" />
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFC800" />
+      <stop offset="50%" stop-color="#FF8A00" />
+      <stop offset="100%" stop-color="#FF4800" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="500" height="500" fill="#000000" rx="32" />
+
+  <!-- Speed Motion Streaks -->
+  <g stroke="url(#ticketGrad)" stroke-linecap="round">
+    <line x1="175" y1="184" x2="210" y2="175" stroke-width="14" />
+    <line x1="150" y1="214" x2="215" y2="197" stroke-width="14" />
+    <line x1="195" y1="236" x2="225" y2="228" stroke-width="14" />
+  </g>
+
+  <!-- Rotated Flying Ticket with Star Cutout -->
+  <g transform="translate(290, 170) rotate(-18)">
+    <!-- Ticket Body with Notches -->
+    <path d="M -85,-50 
+             L 55,-50 
+             A 14,14 0 0,0 55,-22 
+             L 55,22 
+             A 14,14 0 0,0 55,50 
+             L -85,50 
+             A 16,16 0 0,0 -85,18 
+             L -85,-18 
+             A 16,16 0 0,0 -85,-50 Z" 
+          fill="url(#ticketGrad)" rx="16" />
+    
+    <!-- Perforation line -->
+    <line x1="30" y1="-46" x2="30" y2="46" stroke="#000000" stroke-width="5" stroke-dasharray="8 8" opacity="0.85" stroke-linecap="round" />
+
+    <!-- Cutout Star inside ticket -->
+    <polygon points="-25,-26 -18,-9 -1,-9 -15,4 -10,21 -25,11 -40,21 -35,4 -49,-9 -32,-9" fill="#000000" />
+  </g>
+
+  <!-- Brand Typography -->
+  <!-- "Go" in solid white -->
+  <text x="80" y="328" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Montserrat', 'Inter', 'Plus Jakarta Sans', sans-serif" font-weight="900" font-size="118" fill="#FFFFFF" letter-spacing="-3">Go</text>
+  
+  <!-- "Tix" in radiant orange gradient -->
+  <text x="250" y="328" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Montserrat', 'Inter', 'Plus Jakarta Sans', sans-serif" font-weight="900" font-size="118" fill="url(#textGrad)" letter-spacing="-3">Tix</text>
+
+  <!-- Tagline -->
+  <text x="250" y="375" text-anchor="middle" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Inter', 'Plus Jakarta Sans', sans-serif" font-weight="600" font-size="21.5" fill="#FFFFFF" letter-spacing="4.5">Tes tickets, tes événements</text>
+</svg>

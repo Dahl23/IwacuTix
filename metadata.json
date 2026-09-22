@@ -1,0 +1,6 @@
+{
+  "name": "IwacuTix",
+  "description": "IwacuTix - Tes tickets, tes événements. La billetterie digitale et mobile au Burundi. Achetez vos billets d'événements facilement et payez en toute sécurité via Bitcoin Lightning (Blink) et Mobile Money (Lumicash, EcoCash, Bancobu).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
