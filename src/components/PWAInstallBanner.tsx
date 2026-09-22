@@ -24,15 +24,10 @@ export const PWAInstallBanner: React.FC = () => {
     sessionStorage.setItem('iwacutix_pwa_banner_dismissed', 'true');
   };
 
-  const handleInstallClick = async () => {
-    if (hasPrompt) {
-      const success = await install();
-      if (!success) {
-        setShowModal(true);
-      }
-    } else {
-      setShowModal(true);
-    }
+  const handleInstallClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowModal(true);
   };
 
   return (

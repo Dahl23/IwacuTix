@@ -4,7 +4,7 @@ import { usePWAInstall } from '../hooks/usePWAInstall';
 import { PWAInstallModal } from './PWAInstallModal';
 
 interface PWAInstallButtonProps {
-  variant?: 'header' | 'banner' | 'profile' | 'compact';
+  variant?: 'header' | 'banner' | 'profile' | 'compact' | 'floating';
   className?: string;
 }
 
@@ -20,15 +20,10 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
     return null;
   }
 
-  const handleClick = async () => {
-    if (hasPrompt) {
-      const success = await install();
-      if (!success) {
-        setShowModal(true);
-      }
-    } else {
-      setShowModal(true);
-    }
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowModal(true);
   };
 
   return (
