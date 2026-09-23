@@ -232,13 +232,13 @@ export const HomePage: React.FC = () => {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
+            <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
               {events.map((evt) => (
                 <div
                   key={evt.id}
                   id={`all-event-card-${evt.id}`}
                   onClick={() => navigate(`/evenement/${evt.id}`)}
-                  className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group flex flex-col"
+                  className="w-full sm:w-[calc(50%-0.75rem)] md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1.125rem)] xl:w-[calc(20%-1.2rem)] bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group flex flex-col"
                 >
                   <div className="relative h-44 w-full overflow-hidden bg-slate-900">
                     <img
@@ -329,13 +329,13 @@ export const HomePage: React.FC = () => {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
+            <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
               {filteredEvents.map((evt) => (
                 <div
                   key={evt.id}
                   id={`filtered-event-card-${evt.id}`}
                   onClick={() => navigate(`/evenement/${evt.id}`)}
-                  className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group flex flex-col"
+                  className="w-full sm:w-[calc(50%-0.75rem)] md:w-[calc(33.333%-1rem)] lg:w-[calc(25%-1.125rem)] xl:w-[calc(20%-1.2rem)] bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group flex flex-col"
                 >
                   <div className="relative h-44 w-full overflow-hidden bg-slate-900">
                     <img

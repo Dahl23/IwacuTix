@@ -83,7 +83,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
         {/* Public landing header with account actions (hidden for guest-only navigation, login/register CTA) */}
         {isPublicLanding && (
           <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-xl border-b border-orange-200/50 shadow-xs shrink-0 pt-[env(safe-area-inset-top)]">
-            <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 h-16 flex items-center justify-between gap-2">
+            <div className="w-full mx-auto max-w-[1400px] px-4 sm:px-6 md:px-8 lg:px-12 h-16 flex items-center justify-between gap-2">
               <Link to="/home" className="flex items-center gap-2 active:scale-95 transition-all min-w-0">
                 <IwacuTixLogo size="sm" showTagline={true} />
               </Link>
@@ -122,7 +122,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
           </header>
         )}
 
-        <div className={`flex-1 w-full flex flex-col ${isPublicLanding ? 'px-4 sm:px-6 md:px-8 lg:px-12 py-4 sm:py-6' : ''}`}>
+        <div className={`flex-1 w-full flex flex-col ${isPublicLanding ? 'mx-auto w-full max-w-[1400px] px-4 sm:px-6 md:px-8 lg:px-12 py-4 sm:py-6' : ''}`}>
           {children}
         </div>
       </div>
@@ -135,7 +135,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
       
       {/* ================= MODERN RESPONSIVE HEADER / NAVBAR ================= */}
       <header className="sticky top-0 z-50 w-full bg-white/80 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-orange-500/10 backdrop-blur-xl border-b border-orange-200/50 shadow-xs shrink-0 pt-[env(safe-area-inset-top)]">
-        <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 h-16 sm:h-18 flex items-center justify-between">
+        <div className="w-full mx-auto max-w-[1400px] px-4 sm:px-6 md:px-8 lg:px-12 h-16 sm:h-18 flex items-center justify-between">
           
           {/* Left: Branding & Logo */}
           <Link to="/home" className="flex items-center gap-3 active:scale-95 transition-all">
@@ -373,14 +373,14 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
 
       {/* ================= MAIN RESPONSIVE BODY CONTAINER ================= */}
       <main className="flex-1 w-full flex flex-col">
-        <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 py-4 sm:py-6 flex flex-col flex-1">
+        <div className="w-full mx-auto max-w-[1400px] px-4 sm:px-6 md:px-8 lg:px-12 py-4 sm:py-6 flex flex-col flex-1">
           {children}
         </div>
       </main>
 
       {/* ================= MODERN WEB FOOTER ================= */}
       <footer className="w-full bg-slate-900 text-slate-400 py-12 px-4 sm:px-6 md:px-8 lg:px-12 shrink-0 mt-auto border-t border-slate-800">
-        <div className="w-full">
+        <div className="w-full mx-auto max-w-[1400px]">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8 text-left">
             
             {/* Col 1: Brand Pitch */}
