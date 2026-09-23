@@ -30,7 +30,9 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
     notifications, 
     markAllNotificationsAsRead,
     currentPersona,
-    switchPersona
+    switchPersona,
+    isUserVerified,
+    openAuthModal
   } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -73,8 +75,52 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
     : baseNavItems;
 
   if (isStandaloneScreen) {
+    // The "/" landing is the public events page: always browsable without an account
+    const isPublicLanding = path === '/';
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex flex-col w-full antialiased text-slate-800 pt-[env(safe-area-inset-top)]">
+      <div className={`min-h-screen bg-[#F8FAFC] flex flex-col w-full antialiased text-slate-800 ${isPublicLanding ? '' : 'pt-[env(safe-area-inset-top)]'}`}>
+
+        {/* Public landing header with account actions (hidden for guest-only navigation, login/register CTA) */}
+        {isPublicLanding && (
+          <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-xl border-b border-orange-200/50 shadow-xs shrink-0 pt-[env(safe-area-inset-top)]">
+            <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 h-16 flex items-center justify-between gap-2">
+              <Link to="/home" className="flex items-center gap-2 active:scale-95 transition-all min-w-0">
+                <IwacuTixLogo size="sm" showTagline={true} />
+              </Link>
+
+              {isUserVerified ? (
+                <button
+                  onClick={() => navigate('/home')}
+                  className="flex items-center gap-2 p-1.5 pl-2 pr-3 rounded-full bg-white hover:bg-slate-50 border border-orange-200/70 hover:border-orange-300 transition-all shadow-xs cursor-pointer active:scale-95 group min-w-0"
+                  title="Mon espace"
+                >
+                  <div className="w-7 h-7 rounded-full overflow-hidden border border-orange-200 shrink-0">
+                    <img referrerPolicy="no-referrer" src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                  </div>
+                  <span className="hidden sm:block text-[11px] font-bold text-slate-800 truncate max-w-[120px]" title={user.name}>
+                    {user.name}
+                  </span>
+                  <ArrowRight className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => openAuthModal('GENERAL')}
+                    className="hidden sm:inline-flex items-center px-3.5 py-2 rounded-xl border border-orange-300/70 text-orange-800 hover:bg-orange-50 font-bold text-xs transition-all cursor-pointer active:scale-95"
+                  >
+                    Se connecter
+                  </button>
+                  <button
+                    onClick={() => openAuthModal('GENERAL')}
+                    className="inline-flex items-center px-3.5 py-2 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs shadow-md shadow-orange-500/20 transition-all cursor-pointer active:scale-95"
+                  >
+                    Créer un compte
+                  </button>
+                </div>
+              )}
+            </div>
+          </header>
+        )}
 
         <div className="flex-1 w-full flex flex-col">
           {children}
@@ -253,10 +299,10 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                         <UserIcon className="w-4 h-4 text-slate-500" />
                         <span>Mon Profil & Paramètres</span>
                       </Link>
-                      <Link
-                        to="/onboarding"
+<Link
+                        to="/"
                         onClick={() => setProfileMenuOpen(false)}
-                        className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-rose-50 text-rose-600 font-medium transition-colors"
+                        className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-rose-50 text-rose-600 font-medium transition-colors"
                       >
                         <LogOut className="w-4 h-4 text-rose-500" />
                         <span>Déconnexion</span>

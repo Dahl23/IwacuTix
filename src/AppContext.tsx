@@ -24,7 +24,6 @@ import {
   MOCK_VERSEMENTS,
   MOCK_SCAN_LOGS,
   MOCK_ORGANISATEURS_KYC,
-  DEFAULT_ANONYMOUS_AVATAR,
   GUEST_USER
 } from './data';
 
@@ -137,24 +136,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAuthModalReason(undefined);
   };
   
-  // Load saved custom profile if exists and verified; otherwise, default to unauthenticated visitor (GUEST_USER)
-  const [user, setUser] = useState<User>(() => {
-    try {
-      const saved = localStorage.getItem('iwacutix_user_profile');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // User must be verified with a valid phone number and real id
-        if (parsed && parsed.telephone_verifie === true && parsed.phone && parsed.phone.trim().length > 0 && parsed.id !== 'guest') {
-          if (!parsed.avatarUrl || parsed.avatarUrl.includes('photo-1534528741775-53994a69daeb')) {
-            parsed.avatarUrl = DEFAULT_ANONYMOUS_AVATAR;
-          }
-          return { ...GUEST_USER, ...parsed };
-        }
-      }
-    } catch {}
-    // First-time visitor has no account created yet
-    return GUEST_USER;
-  });
+  // IwacuTix always opens in public visitor mode: a session is only established
+  // through explicit account creation or login within the current session.
+  const [user, setUser] = useState<User>(GUEST_USER);
 
   // Is user verified with real name, phone, and OTP SMS verification?
   const isUserVerified = Boolean(

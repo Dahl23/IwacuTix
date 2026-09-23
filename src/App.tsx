@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, useLocation, useNavigate, Location } from 'react-router-dom';
-import { AppProvider } from './AppContext';
+import { AppProvider, useApp } from './AppContext';
 import { PhoneContainer } from './components/PhoneContainer';
 import { PurchaseCardOverlay, isPurchaseRoute } from './components/PurchaseCardOverlay';
+import { AuthModal } from './components/AuthModal';
 
 // Import all modular pages
 import { SplashPage } from './pages/SplashPage';
@@ -19,6 +20,17 @@ import { ScannerPage } from './pages/ScannerPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
 import { RoleSwitcherBanner } from './components/RoleSwitcherBanner';
 
+
+// Global auth modal triggered from anywhere via openAuthModal() (e.g. ticket reservation)
+function GlobalAuthModal() {
+  const { isAuthModalOpen, authModalReason, closeAuthModal } = useApp();
+  if (!isAuthModalOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[80]">
+      <AuthModal isOpen onClose={closeAuthModal} contextReason={authModalReason} />
+    </div>
+  );
+}
 
 function AppRoutes() {
   const location = useLocation();
@@ -96,6 +108,9 @@ function AppRoutes() {
       {isPurchase && (
         <PurchaseCardOverlay onClose={handleClosePurchaseCard} />
       )}
+
+      {/* Global authentication modal (account creation / login) */}
+      <GlobalAuthModal />
     </>
   );
 }
