@@ -59,7 +59,7 @@ export const HomePage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col space-y-6 sm:space-y-8 animate-fade-in relative pb-10">
+    <div className="flex-1 flex flex-col space-y-6 sm:space-y-8 lg:space-y-10 animate-fade-in relative pb-10 lg:pb-16">
       
       {/* ================= 1. NETFLIX-STYLE CINEMATIC HERO SLIDER ================= */}
       {/* Sits right below the navigation bar with auto-advancing slides & CTA */}
@@ -68,7 +68,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* ================= 2. QUICK SEARCH & CATEGORY SELECTOR ================= */}
-      <section className="space-y-4">
+      <section className="space-y-3 sm:space-y-4">
         
         {/* Search Bar Trigger */}
         <div 
@@ -83,7 +83,7 @@ export const HomePage: React.FC = () => {
         </div>
 
         {/* Categories Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 sm:-mx-6 md:-mx-8 lg:-mx-12 px-4 sm:px-6 md:px-8 lg:px-12 scrollbar-none">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 sm:pb-2 -mx-4 sm:-mx-6 md:-mx-8 lg:-mx-12 px-4 sm:px-6 md:px-8 lg:px-12 scrollbar-none">
           {categories.map((cat) => {
             const Icon = cat.icon;
             const isSelected = selectedCategory === cat.id;
@@ -107,10 +107,10 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* ================= ORGANIZER PROMOTION & VERIFICATION BANNER ================= */}
-      <section className="bg-gradient-to-r from-slate-900 via-orange-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white border border-orange-500/30 shadow-lg relative overflow-hidden">
+      <section className="bg-gradient-to-r from-slate-900 via-orange-950 to-slate-900 rounded-3xl p-5 sm:p-6 md:p-8 text-white border border-orange-500/30 shadow-lg relative overflow-hidden">
         <div className="absolute right-0 top-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
           <div className="space-y-1.5 max-w-xl">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/40 text-[10px] font-mono font-bold uppercase tracking-wider">
@@ -159,7 +159,7 @@ export const HomePage: React.FC = () => {
 
       {/* ================= 3. NETFLIX-STYLE THEMED SHELVES ("TOUS" VIEW) ================= */}
       {selectedCategory === 'Tous' ? (
-        <div className="space-y-8 sm:space-y-10">
+        <div className="space-y-8 sm:space-y-10 lg:space-y-12">
           
           {/* Row 1: Top 5 Trending at Burundi */}
           <NetflixEventRow
@@ -216,7 +216,7 @@ export const HomePage: React.FC = () => {
           )}
 
           {/* All events summary grid */}
-          <section className="space-y-4 pt-4 border-t border-slate-200/60">
+          <section className="space-y-4 pt-5 sm:pt-6 border-t border-slate-200/60">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <h3 className="font-display font-black text-lg text-slate-900 tracking-tight flex items-center gap-2">
