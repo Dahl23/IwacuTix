@@ -174,7 +174,7 @@ export const TicketDetailPage: React.FC = () => {
 
             <div className="pt-2 flex justify-between items-start gap-4">
               <div className="space-y-1 min-w-0">
-                <span className="text-[8px] font-mono font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-100">
+                <span className="text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-100">
                   {ticket.eventCategory ? ticket.eventCategory.toUpperCase() : 'SPORT'}
                 </span>
                 <h3 className="font-display font-bold text-base text-slate-900 tracking-tight leading-snug truncate mt-1">
@@ -196,12 +196,12 @@ export const TicketDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Symmetrical Left and Right Notch cutouts (mimicking a torn ticket stub) */}
-          <div className="absolute top-[164px] -left-3.5 w-7 h-7 bg-[#F8FAFC] rounded-full border border-slate-200 z-20"></div>
-          <div className="absolute top-[164px] -right-3.5 w-7 h-7 bg-[#F8FAFC] rounded-full border border-slate-200 z-20"></div>
-          
-          {/* Dashed Tear Line dividing stub header from body */}
-          <div className="h-0 border-t-2 border-dashed border-slate-200 mx-5 relative z-10 my-[13px]"></div>
+          {/* Symmetrical Left and Right Notch cutouts anchored to the tear line (torn ticket stub) */}
+          <div className="relative z-20 mx-5 my-[13px]">
+            <div className="absolute -top-3.5 -left-[34px] w-7 h-7 bg-[#F8FAFC] rounded-full border border-slate-200 -z-10"></div>
+            <div className="absolute -top-3.5 -right-[34px] w-7 h-7 bg-[#F8FAFC] rounded-full border border-slate-200 -z-10"></div>
+            <div className="h-0 border-t-2 border-dashed border-slate-200"></div>
+          </div>
 
           {/* Ticket Body - QR Code Section */}
           <div className="p-6 flex-1 flex flex-col items-center justify-center text-center space-y-6">
@@ -308,7 +308,7 @@ export const TicketDetailPage: React.FC = () => {
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+          <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2.5 pt-0.5">
             <a
               href={getGoogleCalendarUrl(
                 ticket.eventTitle,
@@ -348,7 +348,7 @@ export const TicketDetailPage: React.FC = () => {
         </div>
 
         {/* Download & Action buttons */}
-        <div className="mt-6 grid grid-cols-2 gap-4">
+        <div className="mt-6 grid grid-cols-1 min-[400px]:grid-cols-2 gap-4">
           <button
             id="btn-download-png"
             onClick={downloadPNG}

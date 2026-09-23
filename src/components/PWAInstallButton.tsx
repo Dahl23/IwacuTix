@@ -54,7 +54,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
           title="Installer l'application sur votre téléphone"
         >
           <Download className="w-3.5 h-3.5" />
-          <span className="hidden xs:inline sm:inline">Installer l'app</span>
+          <span className="hidden sm:inline">Installer l'app</span>
         </button>
       )}
 

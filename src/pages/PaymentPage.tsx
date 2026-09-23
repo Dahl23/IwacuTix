@@ -538,10 +538,10 @@ export const PaymentPage: React.FC = () => {
       </div>
 
       {/* Pinned Bottom bar with CTA */}
-      <div className="shrink-0 p-3 sm:p-3.5 bg-white/95 border-t border-slate-200/90 backdrop-blur-md flex items-center justify-between gap-3 z-20 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
-        <div className="flex flex-col">
+      <div className="shrink-0 p-3 sm:p-3.5 bg-white/95 border-t border-slate-200/90 backdrop-blur-md flex items-center justify-between gap-3 flex-wrap z-20 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+        <div className="flex flex-col min-w-0 flex-1">
           <span className="text-[9px] text-slate-500 uppercase font-mono font-semibold">Total à payer</span>
-          <span className="font-mono font-bold text-base sm:text-lg text-brand-primary">
+          <span className="font-mono font-bold text-base sm:text-lg text-brand-primary truncate">
             {formatPrice(total)}
           </span>
         </div>

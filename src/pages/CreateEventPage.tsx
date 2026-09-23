@@ -358,7 +358,7 @@ export const CreateEventPage: React.FC = () => {
           </p>
 
           {/* Presets Horizontal Slider */}
-          <div className="flex gap-3 overflow-x-auto pb-2 snap-x scrollbar-hide">
+          <div className="flex gap-3 overflow-x-auto pb-2 snap-x scrollbar-none">
             {PRESET_IMAGES.map((img, idx) => (
               <button
                 type="button"
@@ -374,7 +374,7 @@ export const CreateEventPage: React.FC = () => {
                 }`}
               >
                 <img referrerPolicy="no-referrer" src={img.url} alt={img.name} className="w-full h-16 object-cover" />
-                <div className="p-1 bg-white/95 text-[8px] font-bold text-slate-700 truncate">{img.name}</div>
+                <div className="p-1 bg-white/95 text-[10px] font-bold text-slate-700 truncate">{img.name}</div>
               </button>
             ))}
           </div>

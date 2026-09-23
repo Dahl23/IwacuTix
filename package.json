@@ -4,6 +4,9 @@
   "version": "1.0.0",
   "description": "IwacuTix - Plateforme PWA de billetterie mobile et digitale au Burundi",
   "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",

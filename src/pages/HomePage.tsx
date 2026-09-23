@@ -83,7 +83,7 @@ export const HomePage: React.FC = () => {
         </div>
 
         {/* Categories Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 scrollbar-none">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 sm:-mx-6 md:-mx-8 lg:-mx-12 px-4 sm:px-6 md:px-8 lg:px-12 scrollbar-none">
           {categories.map((cat) => {
             const Icon = cat.icon;
             const isSelected = selectedCategory === cat.id;
@@ -485,7 +485,7 @@ export const HomePage: React.FC = () => {
               )}
             </div>
 
-            <div className="px-5 py-4 bg-white border-t border-slate-100 flex items-center justify-between shrink-0">
+            <div className="px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-white border-t border-slate-100 flex items-center justify-between shrink-0">
               <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider">
                 {notifications.length} {notifications.length > 1 ? 'Notifications' : 'Notification'}
               </span>

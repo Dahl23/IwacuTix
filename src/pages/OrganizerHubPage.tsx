@@ -301,16 +301,16 @@ export const OrganizerHubPage: React.FC = () => {
                       </div>
 
                       {/* Event Stats summary */}
-                      <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 shrink-0 text-center text-xs">
-                        <div>
+                      <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 min-w-0 text-center text-xs">
+                        <div className="min-w-0">
                           <span className="text-[9px] text-slate-400 block font-mono">Vendus</span>
                           <span className="font-bold text-slate-800">{eventTickets.length}</span>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <span className="text-[9px] text-slate-400 block font-mono">Recette</span>
-                          <span className="font-mono font-bold text-emerald-600">{formatPrice(eventRevenue)}</span>
+                          <span className="font-mono font-bold text-emerald-600 truncate block">{formatPrice(eventRevenue)}</span>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <span className="text-[9px] text-slate-400 block font-mono">Scanneurs</span>
                           <span className="font-bold text-purple-700">{assignedScannersCount}</span>
                         </div>

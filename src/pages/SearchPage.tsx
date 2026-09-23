@@ -228,7 +228,7 @@ export const SearchPage: React.FC = () => {
                   </div>
 
                   <div className="shrink-0 text-right flex flex-col justify-center border-l border-slate-100 pl-2.5 min-w-[70px]">
-                    <span className="text-[8px] text-slate-400 uppercase font-mono font-medium">Dès</span>
+                    <span className="text-[10px] text-slate-400 uppercase font-mono font-medium">Dès</span>
                     <span className="font-mono font-bold text-xs text-orange-600 mt-0.5">
                       {formatPrice(getMinPrice(evt))}
                     </span>

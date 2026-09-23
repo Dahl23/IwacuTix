@@ -74,7 +74,8 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
 
   if (isStandaloneScreen) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex flex-col w-full antialiased text-slate-800">
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col w-full antialiased text-slate-800 pt-[env(safe-area-inset-top)]">
+
         <div className="flex-1 w-full flex flex-col">
           {children}
         </div>
@@ -87,7 +88,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
       <OfflineIndicator />
       
       {/* ================= MODERN RESPONSIVE HEADER / NAVBAR ================= */}
-      <header className="sticky top-0 z-50 w-full bg-white/80 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-orange-500/10 backdrop-blur-xl border-b border-orange-200/50 shadow-xs shrink-0">
+      <header className="sticky top-0 z-50 w-full bg-white/80 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-orange-500/10 backdrop-blur-xl border-b border-orange-200/50 shadow-xs shrink-0 pt-[env(safe-area-inset-top)]">
         <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 h-16 sm:h-18 flex items-center justify-between">
           
           {/* Left: Branding & Logo */}
@@ -404,7 +405,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
       </footer>
 
       {/* ================= MOBILE EXCLUSIVE ACTION BAR (Optional but extremely high usability) ================= */}
-      <div className="md:hidden sticky bottom-0 z-50 w-full bg-white/80 bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-orange-500/15 backdrop-blur-xl border-t border-orange-300/40 px-4 py-2.5 flex items-center justify-around shrink-0 shadow-[0_-4px_16px_-2px_rgba(249,115,22,0.1)]">
+      <div className="md:hidden sticky bottom-0 z-50 w-full bg-white/80 bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-orange-500/15 backdrop-blur-xl border-t border-orange-300/40 px-4 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] flex items-center justify-around shrink-0 shadow-[0_-4px_16px_-2px_rgba(249,115,22,0.1)]">
         {navItems.map((item) => {
           const isActive = path === item.path;
           const Icon = item.icon;
@@ -412,12 +413,12 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-all ${
+              className={`flex flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl transition-all min-w-0 flex-1 ${
                 isActive ? 'text-orange-600 font-bold' : 'text-slate-600 hover:text-orange-950'
               }`}
             >
               <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5px]' : 'stroke-[2px]'}`} />
-              <span className="text-[9px] font-medium tracking-tight">{item.label}</span>
+              <span className="text-[9px] font-medium tracking-tight truncate w-full text-center">{item.label}</span>
             </Link>
           );
         })}
@@ -517,7 +518,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
               )}
             </div>
 
-            <div className="px-5 py-4 bg-white border-t border-slate-100 flex items-center justify-between shrink-0">
+            <div className="px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-white border-t border-slate-100 flex items-center justify-between shrink-0">
               <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider">
                 {notifications?.length || 0} Notifications
               </span>

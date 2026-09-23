@@ -334,7 +334,7 @@ export const ProfilePage: React.FC = () => {
         {/* Localized data cards */}
         <div className="w-full grid grid-cols-2 gap-3 pt-1">
           <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-0.5 text-left shadow-sm">
-            <span className="text-[8px] font-mono text-slate-400 uppercase tracking-wider block">Numéro Principal</span>
+            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Numéro Principal</span>
             <span className="text-xs font-bold font-mono text-slate-800 flex items-center gap-1.5">
               <Smartphone className="w-3.5 h-3.5 text-brand-primary" />
               {user.phone.replace('+257 ', '')}
@@ -342,7 +342,7 @@ export const ProfilePage: React.FC = () => {
           </div>
 
           <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-0.5 text-left shadow-sm">
-            <span className="text-[8px] font-mono text-slate-400 uppercase tracking-wider block">Email</span>
+            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Email</span>
             <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5 truncate">
               <Mail className="w-3.5 h-3.5 text-brand-primary shrink-0" />
               <span className="truncate">{user.email.split('@')[0]}</span>

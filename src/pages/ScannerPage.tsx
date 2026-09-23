@@ -71,24 +71,24 @@ export const ScannerPage: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col bg-[#F8FAFC]">
       {/* Top Header */}
-      <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-20">
-        <div className="flex items-center gap-2">
+      <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between gap-3 sticky top-0 z-20">
+        <div className="flex items-center gap-2 min-w-0">
           <button 
             onClick={() => navigate(-1)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors shrink-0"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <div>
-            <h1 className="font-display font-bold text-slate-900 text-sm">Poste de Contrôle & Scan</h1>
-            <p className="text-[10px] text-slate-500 flex items-center gap-1 font-mono">
-              <UserCheck className="w-3 h-3 text-cyan-600" />
-              Opérateur : {user.name}
+          <div className="min-w-0">
+            <h1 className="font-display font-bold text-slate-900 text-sm truncate">Poste de Contrôle & Scan</h1>
+            <p className="text-[10px] text-slate-500 flex items-center gap-1 font-mono truncate">
+              <UserCheck className="w-3 h-3 text-cyan-600 shrink-0" />
+              <span className="truncate">Opérateur : {user.name}</span>
             </p>
           </div>
         </div>
 
-        <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 font-semibold border border-cyan-200">
+        <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 font-semibold border border-cyan-200 shrink-0">
           Section 4 & 8
         </span>
       </div>

@@ -93,7 +93,7 @@ export const MyTicketsPage: React.FC = () => {
                     <span className="text-[9px] font-mono font-bold text-slate-400">
                       ID : {t.id}
                     </span>
-                    <span className={`text-[8px] font-mono font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
+                    <span className={`text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
                       t.status === 'valide' 
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
                         : 'bg-slate-100 text-slate-500 border-slate-200/60'
