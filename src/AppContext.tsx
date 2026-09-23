@@ -23,7 +23,9 @@ import {
   MOCK_PARAMETRE_PLATEFORME,
   MOCK_VERSEMENTS,
   MOCK_SCAN_LOGS,
-  MOCK_ORGANISATEURS_KYC
+  MOCK_ORGANISATEURS_KYC,
+  DEFAULT_ANONYMOUS_AVATAR,
+  GUEST_USER
 } from './data';
 
 export type PersonaType = 'ACHETEUR' | 'ORGANISATEUR' | 'SCANNEUR' | 'SUPERADMIN';
@@ -92,13 +94,95 @@ interface AppContextType {
   // OTP flow simulation
   requestOtp: (phone: string) => string;
   verifyOtp: (code: string) => boolean;
+
+  // Profile update and user management
+  setUser: React.Dispatch<React.SetStateAction<User>>;
+  updateUserProfile: (data: Partial<User>) => void;
+  isUserVerified: boolean;
+  logoutUser: () => void;
+
+  // Global Auth Modal controls
+  isAuthModalOpen: boolean;
+  authModalReason?: 'RESERVATION' | 'ORGANISATEUR' | 'GENERAL';
+  openAuthModal: (reason?: 'RESERVATION' | 'ORGANISATEUR' | 'GENERAL') => void;
+  closeAuthModal: () => void;
+
+  // KYC Verification for Organizers
+  submitOrganizerKyc: (kycData: {
+    nomLegal: string;
+    numeroCni: string;
+    email: string;
+    cniRectoUrl: string;
+    cniVersoUrl: string;
+    structureName?: string;
+  }) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentPersona, setCurrentPersona] = useState<PersonaType>('ACHETEUR');
-  const [user, setUser] = useState<User>(MOCK_BUYER_USER);
+
+  // Global Auth Modal controls
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalReason, setAuthModalReason] = useState<'RESERVATION' | 'ORGANISATEUR' | 'GENERAL' | undefined>(undefined);
+
+  const openAuthModal = (reason: 'RESERVATION' | 'ORGANISATEUR' | 'GENERAL' = 'GENERAL') => {
+    setAuthModalReason(reason);
+    setIsAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    setIsAuthModalOpen(false);
+    setAuthModalReason(undefined);
+  };
+  
+  // Load saved custom profile if exists and verified; otherwise, default to unauthenticated visitor (GUEST_USER)
+  const [user, setUser] = useState<User>(() => {
+    try {
+      const saved = localStorage.getItem('iwacutix_user_profile');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // User must be verified with a valid phone number and real id
+        if (parsed && parsed.telephone_verifie === true && parsed.phone && parsed.phone.trim().length > 0 && parsed.id !== 'guest') {
+          if (!parsed.avatarUrl || parsed.avatarUrl.includes('photo-1534528741775-53994a69daeb')) {
+            parsed.avatarUrl = DEFAULT_ANONYMOUS_AVATAR;
+          }
+          return { ...GUEST_USER, ...parsed };
+        }
+      }
+    } catch {}
+    // First-time visitor has no account created yet
+    return GUEST_USER;
+  });
+
+  // Is user verified with real name, phone, and OTP SMS verification?
+  const isUserVerified = Boolean(
+    user && 
+    user.telephone_verifie === true && 
+    user.phone && 
+    user.phone.trim().length > 0 && 
+    user.id !== 'guest'
+  );
+
+  const updateUserProfile = (data: Partial<User>) => {
+    setUser((prev) => {
+      const updated = { ...prev, ...data };
+      try {
+        localStorage.setItem('iwacutix_user_profile', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const logoutUser = () => {
+    try {
+      localStorage.removeItem('iwacutix_user_profile');
+    } catch {}
+    setUser(GUEST_USER);
+    setCurrentPersona('ACHETEUR');
+  };
+
   const [cart, setCart] = useState<CartItem[]>([]);
   const [tickets, setTickets] = useState<TicketPurchased[]>(MOCK_PURCHASED_TICKETS);
   const [events, setEvents] = useState<Event[]>(MOCK_EVENTS);
@@ -135,13 +219,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   ]);
   const [followedEventIds, setFollowedEventIds] = useState<string[]>(['evt-vital-o-vs-le-messager']);
 
-  // Switch demo persona
+  // Switch demo persona with requirement to have verified buyer account before switching to organizer
   const switchPersona = (persona: PersonaType) => {
+    if (persona === 'ORGANISATEUR' && !isUserVerified) {
+      openAuthModal('ORGANISATEUR');
+      return;
+    }
     setCurrentPersona(persona);
     if (persona === 'ACHETEUR') {
-      setUser(MOCK_BUYER_USER);
+      if (!isUserVerified) {
+        setUser(GUEST_USER);
+      } else {
+        setUser((prev) => ({ ...prev, role: 'ACHETEUR' }));
+      }
     } else if (persona === 'ORGANISATEUR') {
-      setUser(MOCK_ORGANIZER_USER);
+      setUser((prev) => ({
+        ...prev,
+        role: 'ORGANISATEUR',
+        organisateurProfile: prev.organisateurProfile || {
+          user_id: prev.id,
+          nom_structure: prev.name ? `${prev.name} Productions` : "Vital'O Football Club Burundi",
+          numero_mobile_money_reception: prev.phone || '+257 79 100 200',
+          statut_verification: 'VERIFIE',
+          commission_taux: 5,
+        }
+      }));
     } else if (persona === 'SCANNEUR') {
       setUser(MOCK_SCANNER_USER);
     } else if (persona === 'SUPERADMIN') {
@@ -457,6 +559,50 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return false;
   };
 
+  const submitOrganizerKyc = (kycData: {
+    nomLegal: string;
+    numeroCni: string;
+    email: string;
+    cniRectoUrl: string;
+    cniVersoUrl: string;
+    structureName?: string;
+  }) => {
+    const updatedUser: User = {
+      ...user,
+      name: kycData.nomLegal,
+      email: kycData.email,
+      role: 'ORGANISATEUR',
+      statut_compte: 'ACTIF',
+      telephone_verifie: true,
+      organisateurProfile: {
+        user_id: user.id,
+        nom_structure: kycData.structureName || kycData.nomLegal,
+        numero_mobile_money_reception: user.phone,
+        adresse_lightning_reception: `${kycData.nomLegal.toLowerCase().replace(/[^a-z0-9]/g, '')}@blink.sv`,
+        statut_verification: 'VERIFIE',
+        commission_taux: 5,
+        document_verification: `CNI-${kycData.numeroCni}`
+      }
+    };
+    setUser(updatedUser);
+    setCurrentPersona('ORGANISATEUR');
+
+    // Also register into organisateursKyc list for platform transparency
+    setOrganisateursKyc(prev => [
+      {
+        id: user.id,
+        nom_structure: kycData.structureName || kycData.nomLegal,
+        responsable: kycData.nomLegal,
+        telephone: user.phone,
+        email: kycData.email,
+        statut_verification: 'VERIFIE' as const,
+        commission_taux: 5,
+        moyens: [`Mobile Money (${user.phone})`, `Blink Lightning`]
+      },
+      ...prev
+    ]);
+  };
+
   const followEvent = (eventId: string) => {
     setFollowedEventIds((prev) => {
       if (prev.includes(eventId)) return prev;
@@ -520,6 +666,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     <AppContext.Provider
       value={{
         user,
+        setUser,
+        updateUserProfile,
+        isUserVerified,
+        logoutUser,
+        isAuthModalOpen,
+        authModalReason,
+        openAuthModal,
+        closeAuthModal,
         currentPersona,
         switchPersona,
         cart,
@@ -555,7 +709,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         versements,
         scanLogs,
         requestOtp,
-        verifyOtp
+        verifyOtp,
+        submitOrganizerKyc
       }}
     >
       {children}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { ChevronLeft, ShieldCheck, Lock, Smartphone, Gift, User, Zap, Sparkles, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ShieldCheck, Lock, Smartphone, Gift, User, Zap, Sparkles, ArrowRight, Ticket } from 'lucide-react';
 import { convertFbuToSatoshis, getBlinkRealtimePrice } from '../services/blinkService';
 
 const PaymentMethodLogo: React.FC<{
@@ -255,6 +255,51 @@ export const PaymentPage: React.FC = () => {
             Paiements cryptés et sécurisés par l'infrastructure nationale du Burundi.
           </p>
         </div>
+
+        {/* Selected Tickets Summary Card */}
+        {cart.length > 0 ? (
+          <div className="p-3.5 bg-white border border-slate-200/90 rounded-2xl shadow-xs space-y-2.5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Ticket className="w-3.5 h-3.5 text-brand-primary" />
+                Vos billets sélectionnés
+              </span>
+              <span className="text-[10px] font-mono text-slate-500 font-semibold">
+                {cart.reduce((sum, item) => sum + item.quantity, 0)} place(s)
+              </span>
+            </div>
+            <div className="space-y-1.5 divide-y divide-slate-50">
+              {cart.map((item, idx) => (
+                <div key={idx} className="pt-1.5 first:pt-0 flex items-center justify-between text-xs">
+                  <div className="min-w-0 pr-2">
+                    <p className="font-bold text-slate-800 truncate">{item.eventTitle}</p>
+                    <p className="text-[10px] text-slate-500 font-medium">
+                      Catégorie : <span className="font-semibold text-slate-700">{item.ticketCategory}</span> (x{item.quantity})
+                    </p>
+                  </div>
+                  <span className="font-mono font-bold text-brand-primary shrink-0">
+                    {formatPrice(item.price * item.quantity)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600">
+              <span>Frais de service plateforme</span>
+              <span className="font-mono font-semibold">{formatPrice(serviceFee)}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-center space-y-2">
+            <p className="text-xs font-bold text-amber-900">Aucun billet en cours d'achat</p>
+            <p className="text-[11px] text-amber-700">Veuillez d'abord choisir un événement et sélectionner vos places.</p>
+            <button
+              onClick={() => navigate('/home')}
+              className="px-4 py-2 bg-brand-primary text-white text-xs font-bold rounded-xl shadow-xs hover:bg-brand-primary/90 transition-all"
+            >
+              Parcourir les événements
+            </button>
+          </div>
+        )}
 
         {/* List Header */}
         <div className="space-y-1">

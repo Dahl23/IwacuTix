@@ -6,7 +6,7 @@ import { NetflixEventRow } from '../components/NetflixEventRow';
 import { 
   Search, Calendar, MapPin, Ticket, Bell, Sparkles, 
   Trophy, Music, HelpCircle, Briefcase, X, Megaphone, 
-  Clock, CheckCheck, Flame, Compass, Filter
+  Clock, CheckCheck, Flame, Compass, Filter, PlusCircle, ShieldCheck, ArrowRight, QrCode
 } from 'lucide-react';
 
 export const HomePage: React.FC = () => {
@@ -103,6 +103,57 @@ export const HomePage: React.FC = () => {
               </button>
             );
           })}
+        </div>
+      </section>
+
+      {/* ================= ORGANIZER PROMOTION & VERIFICATION BANNER ================= */}
+      <section className="bg-gradient-to-r from-slate-900 via-orange-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white border border-orange-500/30 shadow-lg relative overflow-hidden">
+        <div className="absolute right-0 top-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1.5 max-w-xl">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/40 text-[10px] font-mono font-bold uppercase tracking-wider">
+                Espace Billetterie & Partenaires
+              </span>
+              <span className="text-[10px] text-slate-400 font-mono">Bujumbura • Gitega • Ngozi</span>
+            </div>
+            <h3 className="text-base sm:text-lg font-display font-extrabold text-white">
+              Vous organisez un concert, match ou événement ?
+            </h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Vérifiez votre identité (CNI Recto/Verso + Email) pour publier vos billets, accéder au tableau de bord des statistiques en direct et nommer vos scanneurs de billets à l'entrée.
+            </p>
+          </div>
+
+          <div className="shrink-0 flex items-center gap-2.5">
+            {user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN' ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigate('/organisateur')}
+                  className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider border border-white/20 transition-all cursor-pointer"
+                >
+                  Statistiques
+                </button>
+                <button
+                  onClick={() => navigate('/organisateur/creer')}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/25 flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Créer un événement</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => navigate('/organisateur/verification')}
+                className="px-5 py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/25 flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>Créer un événement (Vérifier CNI)</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </section>
 

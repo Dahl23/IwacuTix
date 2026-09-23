@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { 
@@ -23,16 +23,33 @@ import {
   Lock,
   Wallet,
   KeyRound,
-  Server
+  Server,
+  Camera,
+  UploadCloud,
+  Check,
+  Edit3,
+  X,
+  Image as ImageIcon
 } from 'lucide-react';
 import { AuthModal } from '../components/AuthModal';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { getStoredAccessToken, API_BASE_URL } from '../services/apiClient';
+import { DEFAULT_ANONYMOUS_AVATAR } from '../data';
+
+const AVATAR_PRESETS = [
+  { id: '0', name: 'Silhouette Neutre', url: DEFAULT_ANONYMOUS_AVATAR },
+  { id: '1', name: 'Professionnel Homme', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80' },
+  { id: '2', name: 'Professionnelle Femme', url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80' },
+  { id: '3', name: 'Jeune Leader', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80' },
+  { id: '4', name: 'Entrepreneur Buja', url: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400&auto=format&fit=crop&q=80' },
+  { id: '5', name: 'Créatrice Digitale', url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=80' },
+];
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const { 
     user, 
+    updateUserProfile,
     tickets, 
     events, 
     followedEventIds, 
@@ -42,6 +59,70 @@ export const ProfilePage: React.FC = () => {
   } = useApp();
   const [showEventSelector, setShowEventSelector] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // Profile Customization States
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [photoUrlInput, setPhotoUrlInput] = useState('');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [fullNameInput, setFullNameInput] = useState(user.name);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isEditingName) {
+      setFullNameInput(user.name);
+    }
+  }, [user.name, isEditingName]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setFeedback({ type: 'error', text: 'L\'image ne doit pas dépasser 5 Mo.' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        updateUserProfile({ avatarUrl: reader.result });
+        setShowPhotoModal(false);
+        setFeedback({ type: 'success', text: 'Photo de profil mise à jour avec succès !' });
+        setTimeout(() => setFeedback(null), 3500);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleApplyUrl = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!photoUrlInput.trim()) return;
+    updateUserProfile({ avatarUrl: photoUrlInput.trim() });
+    setShowPhotoModal(false);
+    setPhotoUrlInput('');
+    setFeedback({ type: 'success', text: 'Photo de profil mise à jour avec succès !' });
+    setTimeout(() => setFeedback(null), 3500);
+  };
+
+  const handleSelectPreset = (url: string) => {
+    updateUserProfile({ avatarUrl: url });
+    setShowPhotoModal(false);
+    setFeedback({ type: 'success', text: 'Photo de profil mise à jour avec succès !' });
+    setTimeout(() => setFeedback(null), 3500);
+  };
+
+  const handleSaveFullName = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fullNameInput.trim()) {
+      setFeedback({ type: 'error', text: 'Veuillez saisir un nom complet valide.' });
+      return;
+    }
+    updateUserProfile({ name: fullNameInput.trim() });
+    setIsEditingName(false);
+    setFeedback({ type: 'success', text: 'Nom complet enregistré avec succès !' });
+    setTimeout(() => setFeedback(null), 3500);
+  };
 
   const activeTicketsCount = tickets.filter((t) => t.status === 'valide').length;
   const hasJwt = !!getStoredAccessToken();
@@ -104,20 +185,123 @@ export const ProfilePage: React.FC = () => {
         </span>
       </div>
 
+      {/* Real-time Feedback Banner */}
+      {feedback && (
+        <div className={`mx-5 mt-3 p-3 rounded-2xl text-xs font-bold flex items-center justify-between border shadow-sm animate-fade-in ${
+          feedback.type === 'success' 
+            ? 'bg-emerald-50 text-emerald-900 border-emerald-200' 
+            : 'bg-rose-50 text-rose-900 border-rose-200'
+        }`}>
+          <span className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+            {feedback.text}
+          </span>
+          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-600 p-0.5">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Profile Info Card Header */}
       <div className="p-5 flex flex-col items-center text-center space-y-4">
-        {/* Rounded Avatar */}
-        <div className="w-20 h-20 rounded-full p-1 border-2 border-brand-primary bg-white shadow-xl overflow-hidden relative group">
-          <img 
-            referrerPolicy="no-referrer"
-            src={user.avatarUrl} 
-            alt={user.name} 
-            className="w-full h-full object-cover rounded-full" 
-          />
+        
+        {/* Rounded Avatar with Camera Edit Button */}
+        <div className="flex flex-col items-center space-y-2">
+          <div className="relative">
+            <div 
+              onClick={() => setShowPhotoModal(true)}
+              className="w-24 h-24 rounded-full p-1 border-2 border-brand-primary bg-white shadow-xl overflow-hidden relative group cursor-pointer active:scale-95 transition-all"
+              title="Cliquer pour changer votre photo de profil"
+            >
+              <img 
+                referrerPolicy="no-referrer"
+                src={user.avatarUrl} 
+                alt={user.name} 
+                className="w-full h-full object-cover rounded-full" 
+              />
+              {/* Hover overlay with Camera */}
+              <div className="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white rounded-full">
+                <Camera className="w-5 h-5 mb-0.5" />
+                <span className="text-[9px] font-bold">Modifier</span>
+              </div>
+            </div>
+
+            {/* Quick Floating Camera Button */}
+            <button
+              type="button"
+              onClick={() => setShowPhotoModal(true)}
+              className="absolute bottom-0 right-0 p-2 rounded-full bg-brand-primary hover:bg-orange-600 text-white shadow-lg border-2 border-white cursor-pointer active:scale-90 transition-transform"
+              title="Changer la photo de profil"
+            >
+              <Camera className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowPhotoModal(true)}
+            className="text-[11px] font-bold text-brand-primary hover:text-orange-700 inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-orange-50 hover:bg-orange-100/80 transition-colors border border-orange-200/60 cursor-pointer"
+          >
+            <Camera className="w-3 h-3" />
+            <span>Modifier la photo de profil</span>
+          </button>
         </div>
 
-        <div className="space-y-1">
-          <h3 className="text-lg font-display font-bold text-slate-900 tracking-tight">{user.name}</h3>
+        {/* Full Name Display and Edit (Nom complet issu de la création du compte) */}
+        <div className="w-full max-w-sm space-y-1">
+          {!isEditingName ? (
+            <div className="flex items-center justify-center gap-2 group">
+              <h3 className="text-xl font-display font-bold text-slate-900 tracking-tight">
+                {user.name}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setFullNameInput(user.name);
+                  setIsEditingName(true);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-brand-primary hover:bg-orange-50 transition-colors cursor-pointer"
+                title="Modifier mon nom complet officiel"
+              >
+                <Edit3 className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleSaveFullName} className="p-3 bg-white border border-brand-primary/40 rounded-2xl shadow-md space-y-2.5 text-left animate-fade-in">
+              <div>
+                <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                  Nom complet officiel (Prénom & Nom)
+                </label>
+                <input
+                  type="text"
+                  value={fullNameInput}
+                  onChange={(e) => setFullNameInput(e.target.value)}
+                  placeholder="Ex: Dahl Ndayisenga"
+                  autoFocus
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-brand-primary focus:bg-white transition-colors"
+                />
+                <p className="text-[9px] text-slate-400 mt-1">
+                  Ce nom complet officiel correspond à votre identité lors de la création de compte et figure sur vos billets nominatifs.
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingName(false)}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded-lg bg-brand-primary hover:bg-orange-600 text-[11px] font-bold text-white shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Enregistrer</span>
+                </button>
+              </div>
+            </form>
+          )}
           
           {user.role === 'ORGANISATEUR' && (
             <p className="text-[10px] font-mono font-bold text-indigo-700 uppercase tracking-wider bg-indigo-50 px-2.5 py-1 rounded-full inline-flex items-center gap-1 border border-indigo-200">
@@ -380,6 +564,139 @@ export const ProfilePage: React.FC = () => {
         onClose={() => setShowAuthModal(false)} 
         defaultTab={user.role === 'ORGANISATEUR' ? 'ORGANISATEUR' : 'ACHETEUR'}
       />
+
+      {/* Hidden File Input for Direct Local Image Upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        accept="image/*"
+        className="hidden"
+      />
+
+      {/* Profile Photo Customization Modal */}
+      {showPhotoModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-4 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/5 border-b border-orange-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-brand-primary text-white shadow-xs">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-display font-bold text-slate-900">Photo de profil</h3>
+                  <p className="text-[10px] text-slate-500">Personnalisez l'avatar de votre compte IwacuTix</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPhotoModal(false)}
+                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-5 max-h-[75vh] overflow-y-auto">
+              {/* Option A: Upload from phone/camera */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 block">
+                  1. Depuis votre appareil
+                </span>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full p-4 rounded-2xl border-2 border-dashed border-orange-300 hover:border-brand-primary bg-orange-50/40 hover:bg-orange-50 transition-all flex flex-col items-center justify-center gap-2 group cursor-pointer active:scale-98"
+                >
+                  <div className="p-3 rounded-full bg-white shadow-sm text-brand-primary group-hover:scale-110 transition-transform">
+                    <UploadCloud className="w-6 h-6" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-bold text-slate-800">
+                      Choisir une photo de la galerie ou prendre une photo
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                      PNG, JPG, WEBP jusqu'à 5 Mo
+                    </p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Option B: Pick curated avatar presets */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 block">
+                  2. Ou choisir parmi les avatars prédéfinis
+                </span>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {AVATAR_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => handleSelectPreset(preset.url)}
+                      className="p-2 rounded-2xl border border-slate-200 hover:border-brand-primary hover:bg-orange-50/50 flex flex-col items-center gap-1.5 transition-all group cursor-pointer text-center"
+                    >
+                      <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-xs group-hover:scale-105 transition-transform">
+                        <img referrerPolicy="no-referrer" src={preset.url} alt={preset.name} className="w-full h-full object-cover" />
+                      </div>
+                      <span className="text-[9px] font-bold text-slate-700 leading-tight truncate w-full">
+                        {preset.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Option C: Image URL */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 block">
+                  3. Ou via un lien web direct (URL)
+                </span>
+                <form onSubmit={handleApplyUrl} className="flex gap-2">
+                  <input
+                    type="url"
+                    value={photoUrlInput}
+                    onChange={(e) => setPhotoUrlInput(e.target.value)}
+                    placeholder="https://exemple.com/ma-photo.jpg"
+                    className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-brand-primary focus:bg-white transition-colors"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!photoUrlInput.trim()}
+                    className="px-4 py-2 bg-brand-primary hover:bg-orange-600 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Appliquer
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  updateUserProfile({ avatarUrl: DEFAULT_ANONYMOUS_AVATAR });
+                  setShowPhotoModal(false);
+                  setFeedback({ type: 'success', text: 'Photo réinitialisée avec la silhouette neutre.' });
+                  setTimeout(() => setFeedback(null), 3000);
+                }}
+                className="text-[10px] font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                Réinitialiser (Silhouette neutre)
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPhotoModal(false)}
+                className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

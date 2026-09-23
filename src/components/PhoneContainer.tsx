@@ -1,16 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { 
   Home, Search, Ticket, User as UserIcon, Bell, 
-  ShoppingBag, Sparkles, LogOut, Menu, X, PlusCircle,
+  Sparkles, LogOut, Menu, X, PlusCircle,
   TrendingUp, Compass, Heart, Settings, ShieldCheck, HelpCircle,
-  Clock, Megaphone, CheckCheck, Maximize, Minimize, Download
+  Clock, Megaphone, CheckCheck, Download,
+  ChevronDown, ArrowRight
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { IwacuTixLogo } from './IwacuTixLogo';
 import { PWAInstallButton } from './PWAInstallButton';
-import { PWAInstallBanner } from './PWAInstallBanner';
 import { OfflineIndicator } from './OfflineIndicator';
 
 interface PhoneContainerProps {
@@ -21,54 +21,56 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const path = location.pathname;
-  const { user, tickets, cart, followedEventIds, events, notifications, markAllNotificationsAsRead } = useApp();
+  const { 
+    user, 
+    tickets, 
+    cart, 
+    followedEventIds, 
+    events, 
+    notifications, 
+    markAllNotificationsAsRead,
+    currentPersona,
+    switchPersona
+  } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
+  const isOrganizer = currentPersona === 'ORGANISATEUR' || currentPersona === 'SUPERADMIN' || user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN' || (user.role as string)?.toLowerCase() === 'organisateur';
   const unreadNotifications = notifications ? notifications.filter(n => !n.read).length : 0;
 
-  // Track fullscreen changes
+  // Close profile dropdown when clicking outside
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setProfileMenuOpen(false);
+      }
     };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const toggleFullscreen = () => {
-    try {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      } else {
-        if (document.exitFullscreen) {
-          document.exitFullscreen().catch(() => {});
-        }
-      }
-    } catch {
-      // Ignore if iframe restrictions apply
-    }
-  };
-
-  // Close mobile menu on path changes
+  // Close menus on path changes
   useEffect(() => {
     setMobileMenuOpen(false);
+    setProfileMenuOpen(false);
   }, [path]);
 
   // Screens that do not need header or footer (standalone/onboarding/splash pages)
   const isStandaloneScreen = ['/', '/onboarding'].includes(path);
 
-  const navItems = [
+  const baseNavItems = [
     { path: '/home', icon: Compass, label: 'Découvrir' },
     { path: '/recherche', icon: Search, label: 'Rechercher' },
     { path: '/mes-billets', icon: Ticket, label: 'Mes Billets' },
-    { path: '/profil', icon: UserIcon, label: 'Mon Profil' },
   ];
 
-  const totalCartItems = cart.reduce((acc, item) => acc + item.quantity, 0);
-  const activeTicketsCount = tickets.filter(t => t.status === 'valide').length;
+  // Organizer space is only displayed in navigation for organizers
+  const navItems = isOrganizer
+    ? [...baseNavItems, { path: '/organisateur', icon: TrendingUp, label: 'Espace Organisateur' }]
+    : baseNavItems;
 
   if (isStandaloneScreen) {
     return (
@@ -81,21 +83,20 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col w-full antialiased text-slate-800 font-sans">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col w-full antialiased text-slate-800 font-sans relative">
       <OfflineIndicator />
-      <PWAInstallBanner />
       
       {/* ================= MODERN RESPONSIVE HEADER / NAVBAR ================= */}
-      <header className="sticky top-0 z-50 w-full bg-white/75 bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-orange-500/15 backdrop-blur-xl border-b border-orange-300/40 shadow-sm shadow-orange-500/5 shrink-0">
-        <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 h-16 sm:h-20 flex items-center justify-between">
+      <header className="sticky top-0 z-50 w-full bg-white/80 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-orange-500/10 backdrop-blur-xl border-b border-orange-200/50 shadow-xs shrink-0">
+        <div className="w-full px-4 sm:px-6 md:px-8 lg:px-12 h-16 sm:h-18 flex items-center justify-between">
           
           {/* Left: Branding & Logo */}
           <Link to="/home" className="flex items-center gap-3 active:scale-95 transition-all">
             <IwacuTixLogo size="md" showTagline={true} />
           </Link>
 
-          {/* Center: Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1.5 lg:gap-3">
+          {/* Center: Clean Desktop Navigation Links */}
+          <nav className="hidden md:flex items-center gap-1.5 lg:gap-2">
             {navItems.map((item) => {
               const isActive = path === item.path;
               const Icon = item.icon;
@@ -105,7 +106,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                   to={item.path}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs transition-all ${
                     isActive 
-                      ? 'bg-orange-500/20 text-orange-900 border border-orange-300/50 shadow-xs' 
+                      ? 'bg-orange-500/15 text-orange-950 border border-orange-300/60 shadow-xs' 
                       : 'text-slate-700 hover:text-orange-950 hover:bg-orange-500/10'
                   }`}
                 >
@@ -114,93 +115,163 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                 </Link>
               );
             })}
-            
-            {/* Direct access to create event */}
-            <Link
-              to="/organisateur/creer"
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs transition-all ${
-                path === '/organisateur/creer'
-                  ? 'bg-emerald-500/20 text-emerald-900 border border-emerald-300/50'
-                  : 'text-slate-700 hover:text-emerald-900 hover:bg-emerald-500/10'
-              }`}
-            >
-              <PlusCircle className="w-4 h-4 shrink-0 text-emerald-600" />
-              <span className="text-emerald-800">Créer un événement</span>
-            </Link>
           </nav>
 
-          {/* Right: Actions (Fullscreen, Notifications, Cart, Profile) */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          {/* Right: Unified, Clean User Profile Menu & Mobile Toggle */}
+          <div className="flex items-center gap-2.5">
             
-            {/* Fullscreen Toggle (Cinema Mode) */}
-            <button
-              onClick={toggleFullscreen}
-              className="relative p-2.5 rounded-xl border bg-white/60 hover:bg-white/90 border-orange-200/70 text-slate-700 hover:text-orange-950 transition-all cursor-pointer active:scale-95 shadow-xs"
-              title={isFullscreen ? "Quitter le plein écran" : "Mode plein écran Cinéma"}
-            >
-              {isFullscreen ? (
-                <Minimize className="w-5 h-5 text-amber-600" />
-              ) : (
-                <Maximize className="w-5 h-5" />
+            {/* Unified User Profile Dropdown */}
+            <div className="relative" ref={profileMenuRef}>
+              <button
+                onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                className="flex items-center gap-2.5 p-1.5 pl-2 pr-3 rounded-full bg-white/80 hover:bg-white border border-orange-200/70 hover:border-orange-300 transition-all shadow-xs cursor-pointer active:scale-95 group"
+                title="Menu utilisateur"
+              >
+                <div className="relative">
+                  <div className="w-8 h-8 rounded-full overflow-hidden border border-orange-200 shrink-0 shadow-xs">
+                    <img referrerPolicy="no-referrer" src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                  </div>
+                  {unreadNotifications > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-white animate-pulse" />
+                  )}
+                </div>
+
+                <div className="hidden sm:block text-left pr-0.5 max-w-[140px]">
+                  <p className="text-[11px] font-bold text-slate-800 leading-tight group-hover:text-brand-primary transition-colors truncate" title={user.name}>
+                    {user.name}
+                  </p>
+                  <p className="text-[9px] font-mono font-semibold text-orange-600 uppercase leading-none">
+                    {isOrganizer ? 'Organisateur' : 'Acheteur'}
+                  </p>
+                </div>
+
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-transform ${profileMenuOpen ? 'rotate-180 text-orange-600' : ''}`} />
+              </button>
+
+              {/* Profile Dropdown Menu Card */}
+              {profileMenuOpen && (
+                <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white/95 backdrop-blur-xl rounded-2xl border border-orange-200/80 shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                  {/* Dropdown Header: Identity & Role Switch */}
+                  <div className="p-3.5 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/5 border-b border-orange-100 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl overflow-hidden border border-orange-200 shrink-0 shadow-xs">
+                      <img referrerPolicy="no-referrer" src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-900 truncate">{user.name}</p>
+                      <p className="text-[10px] text-slate-500 font-mono truncate">{user.email || user.phone}</p>
+                      <span className={`inline-block mt-0.5 text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded-md ${
+                        isOrganizer 
+                          ? 'bg-indigo-100 text-indigo-700' 
+                          : 'bg-orange-100 text-orange-700'
+                      }`}>
+                        {isOrganizer ? 'Compte Organisateur' : 'Compte Acheteur'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Dropdown Actions */}
+                  <div className="p-2 space-y-0.5 text-xs">
+                    
+                    {/* Mon Profil */}
+                    <Link
+                      to="/profil"
+                      onClick={() => setProfileMenuOpen(false)}
+                      className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-orange-50/80 text-slate-700 hover:text-orange-950 font-medium transition-colors"
+                    >
+                      <UserIcon className="w-4 h-4 text-orange-600" />
+                      <span>Mon Profil & Photo</span>
+                    </Link>
+
+                    {/* Notifications */}
+                    <button
+                      onClick={() => {
+                        setProfileMenuOpen(false);
+                        setShowNotifications(true);
+                        markAllNotificationsAsRead();
+                      }}
+                      className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-orange-50/80 text-slate-700 hover:text-orange-950 font-medium transition-colors cursor-pointer text-left"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Bell className="w-4 h-4 text-orange-600" />
+                        <span>Notifications</span>
+                      </div>
+                      {unreadNotifications > 0 && (
+                        <span className="bg-rose-600 text-white text-[10px] font-bold font-mono px-2 py-0.5 rounded-full">
+                          {unreadNotifications} new
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Organizer Section: Only for Organizers */}
+                    {isOrganizer ? (
+                      <div className="pt-1.5 pb-1 border-t border-slate-100 my-1">
+                        <p className="text-[9px] font-mono font-bold uppercase tracking-wider text-indigo-900/60 px-2.5 py-1">
+                          Gestion Organisateur
+                        </p>
+                        <Link
+                          to="/organisateur"
+                          onClick={() => setProfileMenuOpen(false)}
+                          className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-indigo-50/80 text-indigo-900 font-bold transition-colors"
+                        >
+                          <TrendingUp className="w-4 h-4 text-indigo-600" />
+                          <span>Tableau de Bord</span>
+                        </Link>
+                        <Link
+                          to="/organisateur/creer"
+                          onClick={() => setProfileMenuOpen(false)}
+                          className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-emerald-50/80 text-emerald-900 font-bold transition-colors"
+                        >
+                          <PlusCircle className="w-4 h-4 text-emerald-600" />
+                          <span>Créer un événement</span>
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="pt-1.5 pb-1 border-t border-slate-100 my-1">
+                        <button
+                          onClick={() => {
+                            switchPersona('ORGANISATEUR');
+                            setProfileMenuOpen(false);
+                          }}
+                          className="w-full flex items-center justify-between p-2.5 rounded-xl bg-orange-50/80 hover:bg-orange-100 text-orange-900 font-bold transition-colors cursor-pointer text-left"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-brand-primary" />
+                            <span>Passer au mode Organisateur</span>
+                          </div>
+                          <ArrowRight className="w-3.5 h-3.5 text-brand-primary" />
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="pt-1 border-t border-slate-100 my-1">
+                      <Link
+                        to="/profil"
+                        onClick={() => setProfileMenuOpen(false)}
+                        className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-100 text-slate-700 font-medium transition-colors"
+                      >
+                        <UserIcon className="w-4 h-4 text-slate-500" />
+                        <span>Mon Profil & Paramètres</span>
+                      </Link>
+                      <Link
+                        to="/onboarding"
+                        onClick={() => setProfileMenuOpen(false)}
+                        className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-rose-50 text-rose-600 font-medium transition-colors"
+                      >
+                        <LogOut className="w-4 h-4 text-rose-500" />
+                        <span>Déconnexion</span>
+                      </Link>
+                    </div>
+
+                  </div>
+                </div>
               )}
-            </button>
-
-            {/* Notifications Alert Bell */}
-            <button
-              onClick={() => {
-                setShowNotifications(true);
-                markAllNotificationsAsRead();
-              }}
-              className="relative p-2.5 rounded-xl border bg-white/60 hover:bg-white/90 border-orange-200/70 text-slate-700 hover:text-orange-950 transition-all cursor-pointer active:scale-95 shadow-xs"
-              title="Centre de notifications"
-            >
-              <Bell className="w-5 h-5" />
-              {unreadNotifications > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white text-[9px] font-mono font-black rounded-full h-5 w-5 flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
-                  {unreadNotifications}
-                </span>
-              )}
-            </button>
-
-            {/* Shopping Cart Badge */}
-            <Link
-              to="/panier"
-              className={`relative p-2.5 rounded-xl border transition-all ${
-                path === '/panier'
-                  ? 'bg-orange-500/20 border-orange-300 text-orange-900 shadow-xs'
-                  : 'bg-white/60 hover:bg-white/90 border-orange-200/70 text-slate-700 hover:text-orange-950 shadow-xs'
-              }`}
-              title="Mon panier de billets"
-            >
-              <ShoppingBag className="w-5 h-5" />
-              {totalCartItems > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-brand-primary text-white text-[9px] font-mono font-black rounded-full h-5 w-5 flex items-center justify-center border-2 border-white shadow-sm animate-bounce">
-                  {totalCartItems}
-                </span>
-              )}
-            </Link>
-
-            {/* In-App PWA Install Button */}
-            <PWAInstallButton variant="header" />
-
-            {/* User Profile Avatar with small greeting on Desktop */}
-            <Link
-              to="/profil"
-              className="flex items-center gap-2.5 p-1 sm:p-1.5 pr-2.5 sm:pr-3 bg-white/60 hover:bg-white/90 border border-orange-200/70 rounded-xl transition-all group shadow-xs"
-            >
-              <div className="w-8 h-8 rounded-lg overflow-hidden border border-orange-200 shrink-0 shadow-xs">
-                <img referrerPolicy="no-referrer" src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
-              </div>
-              <div className="hidden lg:block text-left">
-                <p className="text-[9px] font-mono font-semibold text-slate-400 uppercase leading-none">Acheteur</p>
-                <p className="text-[11px] font-bold text-slate-700 group-hover:text-brand-primary transition-colors mt-0.5">{user.name.split(' ')[0]}</p>
-              </div>
-            </Link>
+            </div>
 
             {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2.5 rounded-xl bg-white/60 border border-orange-200/70 text-slate-700 hover:text-orange-950 cursor-pointer active:scale-95 transition-transform shadow-xs"
+              className="md:hidden p-2 rounded-xl bg-white/80 border border-orange-200/70 text-slate-700 hover:text-orange-950 cursor-pointer active:scale-95 transition-transform shadow-xs"
+              title="Menu principal"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -210,9 +281,9 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
 
         {/* Mobile Menu Dropdown Panel */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-orange-200/40 bg-white/90 backdrop-blur-xl p-4 space-y-2.5 shadow-lg">
+          <div className="md:hidden border-t border-orange-200/40 bg-white/95 backdrop-blur-xl p-4 space-y-2 shadow-lg">
             <p className="text-[10px] font-mono font-black text-orange-900/60 uppercase tracking-wider pl-2 mb-1">
-              Navigation principale
+              Navigation
             </p>
             {navItems.map((item) => {
               const isActive = path === item.path;
@@ -233,21 +304,22 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
               );
             })}
             
-            <div className="pt-2 border-t border-orange-100 space-y-2">
-              <Link
-                to="/organisateur/creer"
-                className={`flex items-center gap-3 p-3 rounded-xl font-bold text-xs transition-all ${
-                  path === '/organisateur/creer'
-                    ? 'bg-emerald-500/20 text-emerald-900 border border-emerald-300/40'
-                    : 'text-slate-700 hover:bg-emerald-500/10'
-                }`}
-              >
-                <PlusCircle className="w-4.5 h-4.5 text-emerald-600" />
-                <span className="text-emerald-800">Créer un événement</span>
-              </Link>
-              
-              <PWAInstallButton variant="profile" />
-            </div>
+            {/* Event creation in mobile menu only for organizers */}
+            {isOrganizer && (
+              <div className="pt-2 border-t border-orange-100">
+                <Link
+                  to="/organisateur/creer"
+                  className={`flex items-center gap-3 p-3 rounded-xl font-bold text-xs transition-all ${
+                    path === '/organisateur/creer'
+                      ? 'bg-emerald-500/20 text-emerald-900 border border-emerald-300/40'
+                      : 'text-emerald-800 bg-emerald-50/80 hover:bg-emerald-100'
+                  }`}
+                >
+                  <PlusCircle className="w-4.5 h-4.5 text-emerald-600" />
+                  <span>Créer un événement</span>
+                </Link>
+              </div>
+            )}
           </div>
         )}
       </header>
@@ -296,13 +368,23 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
               <p className="text-xs text-slate-400 leading-relaxed">
                 Vous organisez un concert, un match de sport ou une conférence ? Créez vos tarifs et vendez vos billets en ligne avec un tableau de bord de suivi en temps réel.
               </p>
-              <Link 
-                to="/organisateur/creer"
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-[11px] hover:bg-indigo-500 transition-all cursor-pointer"
-              >
-                <PlusCircle className="w-3.5 h-3.5" />
-                <span>Publier un Événement</span>
-              </Link>
+              {isOrganizer ? (
+                <Link 
+                  to="/organisateur/creer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-[11px] hover:bg-indigo-500 transition-all cursor-pointer shadow-xs"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Publier un Événement</span>
+                </Link>
+              ) : (
+                <button
+                  onClick={() => switchPersona('ORGANISATEUR')}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-orange-300 hover:text-white border border-slate-700 font-bold text-[11px] transition-all cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-brand-primary" />
+                  <span>Devenir Organisateur</span>
+                </button>
+              )}
             </div>
 
           </div>
@@ -453,6 +535,9 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
           </div>
         </div>
       )}
+
+      {/* ================= FLOATING PWA INSTALL BUTTON (BOTTOM-LEFT ON ALL PAGES) ================= */}
+      <PWAInstallButton variant="floating" />
 
     </div>
   );

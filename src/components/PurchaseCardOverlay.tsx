@@ -1,9 +1,8 @@
 import React, { useEffect } from 'react';
-import { useLocation, useNavigate, Routes, Route } from 'react-router-dom';
+import { useLocation, useNavigate, Routes, Route, Navigate } from 'react-router-dom';
 import { 
   X, 
   Ticket, 
-  ShoppingBag, 
   CreditCard, 
   CheckCircle2, 
   Smartphone, 
@@ -13,7 +12,6 @@ import {
 
 import { EventDetailsPage } from '../pages/EventDetailsPage';
 import { TicketSelectionPage } from '../pages/TicketSelectionPage';
-import { CartPage } from '../pages/CartPage';
 import { PaymentPage } from '../pages/PaymentPage';
 import { ConfirmationPage } from '../pages/ConfirmationPage';
 import { SuccessPage } from '../pages/SuccessPage';
@@ -47,12 +45,12 @@ export const PurchaseCardOverlay: React.FC<PurchaseCardOverlayProps> = ({ onClos
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // Compute step label and icon based on current path
+  // Compute step label and icon based on current path (3-step direct flow: Details -> Tickets -> Payment)
   const getStepInfo = () => {
     if (pathname.startsWith('/evenement/') && !pathname.endsWith('/billets')) {
       return {
         stepNumber: 1,
-        totalSteps: 4,
+        totalSteps: 3,
         title: "Détails de l'événement",
         subtitle: "Aperçu & Tarifs des places",
         icon: Calendar,
@@ -61,34 +59,25 @@ export const PurchaseCardOverlay: React.FC<PurchaseCardOverlayProps> = ({ onClos
     if (pathname.includes('/billets')) {
       return {
         stepNumber: 2,
-        totalSteps: 4,
+        totalSteps: 3,
         title: "Choix des billets",
         subtitle: "Sélection des catégories & quantités",
         icon: Ticket,
       };
     }
-    if (pathname === '/panier') {
+    if (pathname === '/paiement' || pathname === '/panier') {
       return {
         stepNumber: 3,
-        totalSteps: 4,
-        title: "Panier d'achat",
-        subtitle: "Récapitulatif de la commande",
-        icon: ShoppingBag,
-      };
-    }
-    if (pathname === '/paiement') {
-      return {
-        stepNumber: 4,
-        totalSteps: 4,
+        totalSteps: 3,
         title: "Paiement sécurisé",
-        subtitle: "Blink Lightning ⚡, Lumicash, EcoCash",
+        subtitle: "Blink Lightning ⚡, Lumicash, EcoCash, Bancobu",
         icon: CreditCard,
       };
     }
     if (pathname === '/paiement/confirmation') {
       return {
-        stepNumber: 4,
-        totalSteps: 4,
+        stepNumber: 3,
+        totalSteps: 3,
         title: "Validation en cours",
         subtitle: "Réseau Lightning / Mobile Money",
         icon: Smartphone,
@@ -96,8 +85,8 @@ export const PurchaseCardOverlay: React.FC<PurchaseCardOverlayProps> = ({ onClos
     }
     if (pathname === '/paiement/succes') {
       return {
-        stepNumber: 4,
-        totalSteps: 4,
+        stepNumber: 3,
+        totalSteps: 3,
         title: "Achat Confirmé",
         subtitle: "Vos billets officiels sont prêts",
         icon: CheckCircle2,
@@ -105,8 +94,8 @@ export const PurchaseCardOverlay: React.FC<PurchaseCardOverlayProps> = ({ onClos
     }
     if (pathname.startsWith('/billet/')) {
       return {
-        stepNumber: 4,
-        totalSteps: 4,
+        stepNumber: 3,
+        totalSteps: 3,
         title: "Billet Électronique",
         subtitle: "Pass QR Code d'accès rapide",
         icon: QrCode,
@@ -114,7 +103,7 @@ export const PurchaseCardOverlay: React.FC<PurchaseCardOverlayProps> = ({ onClos
     }
     return {
       stepNumber: 1,
-      totalSteps: 4,
+      totalSteps: 3,
       title: "Réservation IwacuTix",
       subtitle: "Billetterie en ligne sécurisée",
       icon: Ticket,
@@ -199,7 +188,7 @@ export const PurchaseCardOverlay: React.FC<PurchaseCardOverlayProps> = ({ onClos
           <Routes location={location}>
             <Route path="/evenement/:id" element={<EventDetailsPage />} />
             <Route path="/evenement/:id/billets" element={<TicketSelectionPage />} />
-            <Route path="/panier" element={<CartPage />} />
+            <Route path="/panier" element={<Navigate to="/paiement" replace />} />
             <Route path="/paiement" element={<PaymentPage />} />
             <Route path="/paiement/confirmation" element={<ConfirmationPage />} />
             <Route path="/paiement/succes" element={<SuccessPage />} />

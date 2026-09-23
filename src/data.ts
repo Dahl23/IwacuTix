@@ -19,7 +19,8 @@ export const MOCK_EVENTS: Event[] = [
     date: 'Dimanche 26 Juillet 2026',
     time: '15:30',
     location: 'Stade Prince Louis Rwagasore, Bujumbura',
-    organisateur: 'Fédération de Football du Burundi (FFB)',
+    organisateur: 'Vital\'O FC Management',
+    organisateur_id: 'usr-org-vitalo',
     ticketCategories: [
       { name: 'Pelouse', price: 3000, description: 'Accès général autour de la pelouse, ambiance populaire', available: 1200 },
       { name: 'Tribune Latérale', price: 10000, description: 'Sièges assis en tribune non couverte', available: 450 },
@@ -38,6 +39,7 @@ export const MOCK_EVENTS: Event[] = [
     time: '18:00',
     location: 'Plage du Club du Lac Tanganyika, Bujumbura',
     organisateur: 'Empire Avenue & Buja Events',
+    organisateur_id: 'usr-org-empire',
     ticketCategories: [
       { name: 'Standard', price: 15000, description: 'Entrée simple sur la plage', available: 800 },
       { name: 'VIP', price: 40000, description: 'Accès zone avant-scène et bar dédié', available: 200 },
@@ -54,7 +56,8 @@ export const MOCK_EVENTS: Event[] = [
     date: 'Vendredi 7 Août 2026',
     time: '14:00',
     location: 'Palais des Congrès de Kigobe, Bujumbura',
-    organisateur: 'Conseil National des Églises du Burundi',
+    organisateur: 'Mission Évangélique de Kigobe',
+    organisateur_id: 'usr-org-croisade',
     ticketCategories: [
       { name: 'Entrée Libre (Soutien)', price: 0, description: 'Accès gratuit, billet de réservation obligatoire', available: 2000 },
       { name: 'Soutien Or', price: 10000, description: 'Place réservée à l\'avant, soutien financier à l\'organisation', available: 300 },
@@ -114,12 +117,31 @@ export const MOCK_EVENTS: Event[] = [
   }
 ];
 
+export const DEFAULT_ANONYMOUS_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+  <rect width="128" height="128" fill="#E2E8F0"/>
+  <circle cx="64" cy="48" r="22" fill="#94A3B8"/>
+  <path d="M28 112c0-19.882 16.118-36 36-36s36 16.118 36 36v4H28v-4z" fill="#94A3B8"/>
+</svg>
+`)}`;
+
+export const GUEST_USER: User = {
+  id: 'guest',
+  name: 'Invité (Non connecté)',
+  phone: '',
+  email: '',
+  avatarUrl: DEFAULT_ANONYMOUS_AVATAR,
+  role: 'ACHETEUR',
+  statut_compte: 'ACTIF',
+  telephone_verifie: false
+};
+
 export const MOCK_BUYER_USER: User = {
   id: 'usr-buyer-001',
   name: 'Dahl Ndayisenga',
   phone: '+257 69 123 456',
   email: 'dahlndayisenga0@gmail.com',
-  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+  avatarUrl: DEFAULT_ANONYMOUS_AVATAR,
   role: 'ACHETEUR',
   statut_compte: 'ACTIF',
   telephone_verifie: true

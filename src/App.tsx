@@ -13,6 +13,8 @@ import { ProfilePage } from './pages/ProfilePage';
 import { SearchPage } from './pages/SearchPage';
 import { CreateEventPage } from './pages/CreateEventPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { OrganizerHubPage } from './pages/OrganizerHubPage';
+import { OrganizerKycPage } from './pages/OrganizerKycPage';
 import { ScannerPage } from './pages/ScannerPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
 import { RoleSwitcherBanner } from './components/RoleSwitcherBanner';
@@ -29,7 +31,7 @@ function AppRoutes() {
 
   // When browsing non-purchase main pages, keep the background updated
   useEffect(() => {
-    if (!isPurchase && location.pathname !== '/' && location.pathname !== '/onboarding') {
+    if (!isPurchase && location.pathname !== '/onboarding' && location.pathname !== '/splash') {
       setBackgroundLocation(location);
     }
   }, [location, isPurchase]);
@@ -50,34 +52,39 @@ function AppRoutes() {
       <RoleSwitcherBanner />
       <PhoneContainer>
         <Routes location={renderedLocation}>
-          {/* 1. Splash intro screen */}
-          <Route path="/" element={<SplashPage />} />
-          
-          {/* 2. Three onboard slides */}
-          <Route path="/onboarding" element={<OnboardingPage />} />
-          
-          {/* 3. Main discovery home screen */}
+          {/* 1. Main discovery home screen (direct landing on announcements) */}
+          <Route path="/" element={<HomePage />} />
           <Route path="/home" element={<HomePage />} />
           
-          {/* 4. List of purchased digital passes */}
+          {/* 2. Optional splash and onboard routes */}
+          <Route path="/splash" element={<SplashPage />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
+          
+          {/* 3. List of purchased digital passes */}
           <Route path="/mes-billets" element={<MyTicketsPage />} />
           
-          {/* 5. Buyer profile & support details */}
+          {/* 4. Buyer profile & support details */}
           <Route path="/profil" element={<ProfilePage />} />
           
-          {/* 6. Query match & city filtration */}
+          {/* 5. Query match & city filtration */}
           <Route path="/recherche" element={<SearchPage />} />
 
-          {/* 7. Partner Event Creation form */}
+          {/* 6. Organizer CNI & Email KYC verification */}
+          <Route path="/organisateur/verification" element={<OrganizerKycPage />} />
+
+          {/* 7. Organizer Hub (exclusive management of events attached to the organizer) */}
+          <Route path="/organisateur" element={<OrganizerHubPage />} />
+
+          {/* 8. Partner Event Creation form */}
           <Route path="/organisateur/creer" element={<CreateEventPage />} />
 
-          {/* 8. Partner Event Sales & Ticket Scanning Dashboard */}
+          {/* 9. Partner Event Sales & Ticket Scanning Dashboard for a specific event */}
           <Route path="/organisateur/dashboard/:id" element={<DashboardPage />} />
 
-          {/* 9. Specialized Access Control & Ticket Scanner (Section 4 & 8) */}
+          {/* 10. Specialized Access Control & Ticket Scanner (Section 4 & 8) */}
           <Route path="/scan" element={<ScannerPage />} />
 
-          {/* 10. SuperAdmin Platform Parameters & KYC Supervision (Section 3 & 5) */}
+          {/* 11. SuperAdmin Platform Parameters & KYC Supervision (Section 3 & 5) */}
           <Route path="/admin/superadmin" element={<SuperAdminPage />} />
 
           {/* Catch-all fallback */}

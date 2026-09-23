@@ -73,6 +73,30 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
+  // Verification that the event is attached to this organizer's name/account
+  const isOwner = user.role === 'SUPERADMIN' || 
+    (Boolean(event.organisateur_id) && event.organisateur_id === user.id) ||
+    (Boolean(event.organisateur) && Boolean(user.name) && event.organisateur.toLowerCase().trim() === user.name.toLowerCase().trim()) ||
+    (Boolean(user.organisateurProfile?.nom_structure) && Boolean(event.organisateur) && event.organisateur.toLowerCase().trim() === user.organisateurProfile!.nom_structure.toLowerCase().trim());
+
+  if (!isOwner && user.role === 'ORGANISATEUR') {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[#F8FAFC] h-full">
+        <ShieldCheck className="w-12 h-12 text-amber-500 mb-4" />
+        <h3 className="text-lg font-display font-bold text-slate-900">Accès réservé au propriétaire de l'événement</h3>
+        <p className="text-xs text-slate-500 mt-2 max-w-sm">
+          Cet événement est rattaché à « <strong className="text-slate-800">{event.organisateur}</strong> ». Vous ne pouvez visualiser et gérer que les statistiques des événements rattachés à votre nom (<strong className="text-slate-800">{user.name}</strong>).
+        </p>
+        <button
+          onClick={() => navigate('/organisateur')}
+          className="mt-6 px-6 py-2.5 bg-brand-primary rounded-xl text-white font-medium text-xs uppercase cursor-pointer"
+        >
+          Voir mes événements
+        </button>
+      </div>
+    );
+  }
+
   const handlePublishUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!updateMessage.trim()) return;

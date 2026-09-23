@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { Event, TicketCategory } from '../types';
-import { ChevronLeft, Calendar as CalendarIcon, MapPin, Sparkles, Plus, Trash2, Tag, Layers, CheckCircle } from 'lucide-react';
+import { ChevronLeft, Calendar as CalendarIcon, MapPin, Sparkles, Plus, Trash2, Tag, Layers, CheckCircle, ShieldAlert } from 'lucide-react';
 
 const PRESET_IMAGES = [
   {
@@ -39,7 +39,9 @@ const PRESET_IMAGES = [
 
 export const CreateEventPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, addEvent } = useApp();
+  const { user, addEvent, currentPersona, switchPersona } = useApp();
+
+  const isOrganizer = currentPersona === 'ORGANISATEUR' || currentPersona === 'SUPERADMIN' || user.role === 'organisateur' || user.role === 'superadmin';
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -131,7 +133,8 @@ export const CreateEventPage: React.FC = () => {
       date: capitalizedDate,
       time: time || '18:00',
       location: location.trim(),
-      organisateur: organisateur.trim() || user.name,
+      organisateur: organisateur.trim() || user.organisateurProfile?.nom_structure || user.name,
+      organisateur_id: user.id,
       ticketCategories,
       isFeatured: true
     };
@@ -142,6 +145,59 @@ export const CreateEventPage: React.FC = () => {
     // Redirect directly to the dashboard page of this newly created event!
     navigate(`/organisateur/dashboard/${eventId}`);
   };
+
+  if (!isOrganizer) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 max-w-lg mx-auto">
+        <div className="w-full bg-white rounded-3xl p-6 sm:p-8 border border-orange-200/80 shadow-xl shadow-orange-500/5 text-center space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-300/40 flex items-center justify-center mx-auto text-amber-600 shadow-xs">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="inline-block px-3 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-100/70 text-amber-800 border border-amber-200/60">
+              Accès Réservé
+            </span>
+            <h2 className="text-xl sm:text-2xl font-display font-extrabold text-slate-900 tracking-tight">
+              Espace Réservé aux Organisateurs
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              La création et publication d'événements sur <strong className="text-orange-950 font-bold">IwacuTix</strong> est exclusivement disponible pour les comptes organisateurs certifiés.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-orange-50/70 border border-orange-200/60 text-left space-y-2">
+            <p className="text-xs font-bold text-orange-950 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-brand-primary shrink-0" />
+              Pourquoi passer au compte Organisateur ?
+            </p>
+            <ul className="text-[11px] text-slate-600 space-y-1.5 pl-4 list-disc marker:text-brand-primary">
+              <li>Vendez vos billets instantanément via Lumicash, EcoCash & Bancobu</li>
+              <li>Encaissement direct et tableau de bord financier en temps réel</li>
+              <li>Scannez et validez les QR codes de vos participants le jour J</li>
+            </ul>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <button
+              onClick={() => {
+                switchPersona('ORGANISATEUR');
+              }}
+              className="flex-1 py-3 px-5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs shadow-md shadow-orange-500/25 transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95"
+            >
+              <span>Activer mon profil Organisateur</span>
+            </button>
+            <button
+              onClick={() => navigate('/home')}
+              className="py-3 px-5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer active:scale-95"
+            >
+              Retour à l'accueil
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col bg-[#F8FAFC]">

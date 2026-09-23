@@ -11,6 +11,17 @@ export interface OrganisateurProfile {
   document_verification?: string;
 }
 
+export interface OrganisateurKyc {
+  cniNom: string;
+  cniNumero: string;
+  cniRectoUrl: string;
+  cniVersoUrl: string;
+  email: string;
+  emailVerifie: boolean;
+  statut: 'VERIFIE' | 'EN_ATTENTE' | 'NON_SOUMIS';
+  dateVerification?: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -22,6 +33,7 @@ export interface User {
   telephone_verifie: boolean;
   activeAssignmentEventId?: string; // Capacité de scan sur un événement précis
   organisateurProfile?: OrganisateurProfile;
+  kycOrganisateur?: OrganisateurKyc;
 }
 
 export interface ScanneurAssignment {

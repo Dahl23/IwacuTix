@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { ChevronLeft, Plus, Minus, Ticket, Info } from 'lucide-react';
+import { ChevronLeft, Plus, Minus, Ticket, Info, ArrowRight } from 'lucide-react';
 
 export const TicketSelectionPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { events, addToCart, clearCart } = useApp();
+  const { events, addToCart, clearCart, isUserVerified, openAuthModal } = useApp();
 
   const event = events.find((evt) => evt.id === id);
 
@@ -68,8 +68,14 @@ export const TicketSelectionPage: React.FC = () => {
       }
     });
 
-    // Navigate to the basket summary page
-    navigate('/panier');
+    // If visitor has not created an account yet, obligate account creation & OTP verification
+    if (!isUserVerified) {
+      openAuthModal('RESERVATION');
+      return;
+    }
+
+    // Navigate directly to payment (cart intermediate step removed)
+    navigate('/paiement');
   };
 
   const formatPrice = (price: number) => {
@@ -185,7 +191,9 @@ export const TicketSelectionPage: React.FC = () => {
       {/* Pinned Sticky footer with computation summary */}
       <div className="shrink-0 p-3 sm:p-3.5 bg-white/95 border-t border-slate-200/90 backdrop-blur-md flex items-center justify-between gap-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-20">
         <div className="flex flex-col">
-          <span className="text-[9px] text-slate-500 uppercase font-mono font-semibold">Billet{totalQuantity > 1 ? 's' : ''} : {totalQuantity}</span>
+          <span className="text-[9px] text-slate-500 uppercase font-mono font-semibold">
+            Billet{totalQuantity > 1 ? 's' : ''} : {totalQuantity} {!isUserVerified && '• Compte requis'}
+          </span>
           <span className="font-mono font-bold text-base sm:text-lg text-brand-primary">
             {formatPrice(totalPrice)}
           </span>
@@ -200,8 +208,8 @@ export const TicketSelectionPage: React.FC = () => {
               : 'bg-slate-100 text-slate-400 border border-slate-200/50 cursor-not-allowed'
           }`}
         >
-          <span>Continuer</span>
-          <Ticket className="w-4 h-4" />
+          <span>{isUserVerified ? 'Procéder au paiement' : 'Créer compte & Réserver'}</span>
+          <ArrowRight className="w-4 h-4" />
         </button>
       </div>
 
