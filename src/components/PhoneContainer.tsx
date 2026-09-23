@@ -122,7 +122,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
           </header>
         )}
 
-        <div className="flex-1 w-full flex flex-col">
+        <div className={`flex-1 w-full flex flex-col ${isPublicLanding ? 'px-4 sm:px-6 md:px-8 lg:px-12 py-4 sm:py-6' : ''}`}>
           {children}
         </div>
       </div>

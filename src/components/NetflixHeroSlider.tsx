@@ -181,20 +181,20 @@ export const NetflixHeroSlider: React.FC<NetflixHeroSliderProps> = ({
         <div className="absolute inset-0 z-30 flex flex-col justify-between p-5 sm:p-8 md:p-10 lg:p-14 text-white">
           
           {/* Top Bar inside Billboard: Category tag & Controls */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] sm:text-xs font-mono tracking-wider uppercase font-bold border shadow-lg ${badge.color}`}>
-                <BadgeIcon className="w-3.5 h-3.5" />
-                {badge.label}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] sm:text-xs font-mono tracking-wider uppercase font-bold border shadow-lg truncate min-w-0 ${badge.color}`}>
+                <BadgeIcon className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate min-w-0">{badge.label}</span>
               </span>
-              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-white/10 backdrop-blur-md text-white/90 border border-white/15">
+              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-white/10 backdrop-blur-md text-white/90 border border-white/15 shrink-0">
                 <ShieldCheck className="w-3 h-3 text-emerald-400" />
                 Billet 100% Officiel
               </span>
             </div>
 
             {/* Slide counter and Play/Pause */}
-            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 text-xs font-mono">
+            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 text-xs font-mono shrink-0">
               <span className="text-amber-400 font-bold">{currentIndex + 1}</span>
               <span className="text-white/40">/</span>
               <span className="text-white/70">{total}</span>
