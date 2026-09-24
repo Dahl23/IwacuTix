@@ -15,6 +15,21 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="alternate icon" type="image/png" href="/pwa-192x192.png" />
+    <script>
+      (function() {
+        try {
+          var mode = localStorage.getItem('iwacutix_theme_mode') || 'system';
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (mode === 'dark' || (mode === 'system' && prefersDark)) {
+            document.documentElement.classList.add('dark');
+            var metaTheme = document.querySelector('meta[name="theme-color"]');
+            if (metaTheme) metaTheme.setAttribute('content', '#090A0F');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { 
   CartItem, 
   TicketPurchased, 
@@ -116,12 +116,90 @@ interface AppContextType {
     cniVersoUrl: string;
     structureName?: string;
   }) => void;
+
+  // Dark mode & Theme
+  themeMode: 'light' | 'dark' | 'system';
+  isDarkMode: boolean;
+  setThemeMode: (mode: 'light' | 'dark' | 'system') => void;
+  toggleDarkMode: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentPersona, setCurrentPersona] = useState<PersonaType>('ACHETEUR');
+
+  // Dark mode & theme preference management (respects system preference and persists choice)
+  const [themeMode, setThemeModeState] = useState<'light' | 'dark' | 'system'>(() => {
+    try {
+      const saved = localStorage.getItem('iwacutix_theme_mode');
+      if (saved === 'light' || saved === 'dark' || saved === 'system') {
+        return saved;
+      }
+    } catch {}
+    return 'system';
+  });
+
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+
+  // Calculate actual dark mode based on current mode and system preferences
+  const isDarkMode = themeMode === 'system' ? systemPrefersDark : themeMode === 'dark';
+
+  // Listen to OS system preference changes in real-time
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => {
+      setSystemPrefersDark(e.matches);
+    };
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handler);
+    } else {
+      (mediaQuery as any).addListener(handler);
+    }
+
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener('change', handler);
+      } else {
+        (mediaQuery as any).removeListener(handler);
+      }
+    };
+  }, []);
+
+  // Sync `.dark` class on <html> and update meta theme-color tag
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    if (isDarkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute('content', isDarkMode ? '#090A0F' : '#FF5500');
+    }
+  }, [isDarkMode]);
+
+  const setThemeMode = (mode: 'light' | 'dark' | 'system') => {
+    setThemeModeState(mode);
+    try {
+      localStorage.setItem('iwacutix_theme_mode', mode);
+    } catch {}
+  };
+
+  const toggleDarkMode = () => {
+    const nextMode = isDarkMode ? 'light' : 'dark';
+    setThemeMode(nextMode);
+  };
 
   // Global Auth Modal controls
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -710,7 +788,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         scanLogs,
         requestOtp,
         verifyOtp,
-        submitOrganizerKyc
+        submitOrganizerKyc,
+        themeMode,
+        isDarkMode,
+        setThemeMode,
+        toggleDarkMode
       }}
     >
       {children}

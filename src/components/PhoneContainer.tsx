@@ -13,6 +13,7 @@ import { IwacuTixLogo } from './IwacuTixLogo';
 import { PWAInstallButton } from './PWAInstallButton';
 import { OfflineIndicator } from './OfflineIndicator';
 import { AuthModal } from './AuthModal';
+import { ThemeToggle } from './ThemeToggle';
 
 interface PhoneContainerProps {
   children: React.ReactNode;
@@ -37,7 +38,9 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
     isAuthModalOpen,
     authModalReason,
     openAuthModal,
-    closeAuthModal
+    closeAuthModal,
+    themeMode,
+    isDarkMode
   } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -81,7 +84,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
 
   if (isStandaloneScreen) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex flex-col w-full antialiased text-slate-800">
+      <div className="min-h-screen bg-[#F8FAFC] dark:bg-brand-dark flex flex-col w-full antialiased text-slate-800 dark:text-slate-100 transition-colors duration-200">
         <div className="flex-1 w-full flex flex-col">
           {children}
         </div>
@@ -90,11 +93,11 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col w-full antialiased text-slate-800 font-sans relative">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-brand-dark flex flex-col w-full antialiased text-slate-800 dark:text-slate-100 font-sans relative transition-colors duration-200">
       <OfflineIndicator />
       
       {/* ================= FIXED STABLE RESPONSIVE NAVBAR ================= */}
-      <header className="fixed top-0 left-0 right-0 z-50 w-full bg-white/95 bg-gradient-to-r from-orange-500/10 via-white to-orange-500/10 backdrop-blur-xl border-b border-orange-200/60 shadow-xs shrink-0 transition-all">
+      <header className="fixed top-0 left-0 right-0 z-50 w-full bg-white/95 dark:bg-brand-dark/95 bg-gradient-to-r from-orange-500/10 via-white dark:via-brand-dark to-orange-500/10 backdrop-blur-xl border-b border-orange-200/60 dark:border-slate-800 shadow-xs shrink-0 transition-all">
         <div className="w-full max-w-[1560px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 h-16 sm:h-18 flex items-center justify-between">
           
           {/* Left: Branding & Logo */}
@@ -113,8 +116,8 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                   to={item.path}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs transition-all ${
                     isActive 
-                      ? 'bg-orange-500/15 text-orange-950 border border-orange-300/60 shadow-xs' 
-                      : 'text-slate-700 hover:text-orange-950 hover:bg-orange-500/10'
+                      ? 'bg-orange-500/15 text-orange-950 dark:text-orange-400 border border-orange-300/60 dark:border-orange-500/30 shadow-xs' 
+                      : 'text-slate-700 dark:text-slate-300 hover:text-orange-950 dark:hover:text-white hover:bg-orange-500/10 dark:hover:bg-slate-800/60'
                   }`}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
@@ -124,55 +127,58 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
             })}
           </nav>
 
-          {/* Right: Unified, Clean User Profile Menu & Mobile Toggle */}
-          <div className="flex items-center gap-2.5">
+          {/* Right: Theme Toggle, Unified User Profile Menu & Mobile Toggle */}
+          <div className="flex items-center gap-2 sm:gap-2.5">
             
+            {/* Dark Mode Toggle */}
+            <ThemeToggle variant="compact" />
+
             {/* Unified User Profile Dropdown */}
             <div className="relative" ref={profileMenuRef}>
               <button
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
                 className={`flex items-center gap-2 p-1.5 pl-2 pr-3 rounded-full border transition-all shadow-xs cursor-pointer active:scale-95 group ${
                   !isUserVerified
-                    ? 'bg-amber-50/90 hover:bg-amber-100/80 border-amber-300 text-amber-900'
-                    : 'bg-white/80 hover:bg-white border-orange-200/70 hover:border-orange-300 text-slate-800'
+                    ? 'bg-amber-50/90 dark:bg-brand-slate hover:bg-amber-100/80 dark:hover:bg-slate-800 border-amber-300 dark:border-amber-600/40 text-amber-900 dark:text-amber-400'
+                    : 'bg-white/80 dark:bg-brand-slate hover:bg-white dark:hover:bg-slate-800 border-orange-200/70 dark:border-slate-700 text-slate-800 dark:text-slate-100'
                 }`}
                 title="Menu utilisateur"
               >
                 <div className="relative">
-                  <div className="w-8 h-8 rounded-full overflow-hidden border border-orange-200 shrink-0 shadow-xs bg-slate-100 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full overflow-hidden border border-orange-200 dark:border-slate-700 shrink-0 shadow-xs bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
                     <img referrerPolicy="no-referrer" src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
                   </div>
                   {unreadNotifications > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-white animate-pulse" />
+                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-white dark:ring-brand-slate animate-pulse" />
                   )}
                 </div>
 
                 <div className="hidden sm:block text-left pr-0.5 max-w-[140px]">
-                  <p className="text-[11px] font-bold leading-tight group-hover:text-brand-primary transition-colors truncate" title={user.name}>
+                  <p className="text-[11px] font-bold leading-tight text-slate-900 dark:text-slate-100 group-hover:text-brand-primary transition-colors truncate" title={user.name}>
                     {isUserVerified ? user.name : 'Connexion'}
                   </p>
-                  <p className="text-[9px] font-mono font-semibold uppercase leading-none text-orange-600">
+                  <p className="text-[9px] font-mono font-semibold uppercase leading-none text-orange-600 dark:text-orange-400">
                     {isUserVerified ? (isOrganizer ? 'Organisateur' : 'Acheteur') : 'Compte Invité'}
                   </p>
                 </div>
 
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-transform ${profileMenuOpen ? 'rotate-180 text-orange-600' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200 transition-transform ${profileMenuOpen ? 'rotate-180 text-orange-600 dark:text-orange-400' : ''}`} />
               </button>
 
               {/* Profile Dropdown Menu Card */}
               {profileMenuOpen && (
-                <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white/95 backdrop-blur-xl rounded-2xl border border-orange-200/80 shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white/98 dark:bg-brand-slate backdrop-blur-xl rounded-2xl border border-orange-200/80 dark:border-slate-800 shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
                   
                   {/* Dropdown Header: Identity & Role Switch */}
-                  <div className="p-3.5 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/5 border-b border-orange-100 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl overflow-hidden border border-orange-200 shrink-0 shadow-xs">
+                  <div className="p-3.5 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/5 dark:from-slate-800 dark:to-slate-800/60 border-b border-orange-100 dark:border-slate-800 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl overflow-hidden border border-orange-200 dark:border-slate-700 shrink-0 shadow-xs">
                       <img referrerPolicy="no-referrer" src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-slate-900 truncate">
+                      <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
                         {isUserVerified ? user.name : 'Visiteur / Compte Invité'}
                       </p>
-                      <p className="text-[10px] text-slate-500 font-mono truncate">
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate">
                         {isUserVerified ? (user.phone || user.email) : 'Non connecté'}
                       </p>
                       <div className="flex items-center gap-1.5 mt-0.5">
@@ -289,14 +295,25 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                       </div>
                     )}
 
+                    {/* Appearance & Theme Selector */}
+                    <div className="py-2 px-1 border-t border-slate-100 dark:border-slate-800 my-1">
+                      <div className="flex items-center justify-between mb-1.5 px-1">
+                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Thème & Affichage</span>
+                        <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
+                          {themeMode === 'system' ? 'Système auto' : isDarkMode ? 'Sombre' : 'Clair'}
+                        </span>
+                      </div>
+                      <ThemeToggle variant="segmented" />
+                    </div>
+
                     {isUserVerified && (
-                      <div className="pt-1 border-t border-slate-100 my-1">
+                      <div className="pt-1 border-t border-slate-100 dark:border-slate-800 my-1">
                         <Link
                           to="/profil"
                           onClick={() => setProfileMenuOpen(false)}
-                          className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-100 text-slate-700 font-medium transition-colors"
+                          className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium transition-colors"
                         >
-                          <UserIcon className="w-4 h-4 text-slate-500" />
+                          <UserIcon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                           <span>Mon Profil & Paramètres</span>
                         </Link>
                         <button
@@ -304,7 +321,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                             setProfileMenuOpen(false);
                             logoutUser();
                           }}
-                          className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-rose-50 text-rose-600 font-medium transition-colors cursor-pointer text-left"
+                          className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-medium transition-colors cursor-pointer text-left"
                         >
                           <LogOut className="w-4 h-4 text-rose-500" />
                           <span>Déconnexion</span>
@@ -320,7 +337,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-xl bg-white/80 border border-orange-200/70 text-slate-700 hover:text-orange-950 cursor-pointer active:scale-95 transition-transform shadow-xs"
+              className="md:hidden p-2 rounded-xl bg-white/80 dark:bg-brand-slate border border-orange-200/70 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-orange-950 dark:hover:text-white cursor-pointer active:scale-95 transition-transform shadow-xs"
               title="Menu principal"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -331,8 +348,17 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
 
         {/* Mobile Menu Dropdown Panel */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-orange-200/40 bg-white/95 backdrop-blur-xl p-4 space-y-2 shadow-lg">
-            <p className="text-[10px] font-mono font-black text-orange-900/60 uppercase tracking-wider pl-2 mb-1">
+          <div className="md:hidden border-t border-orange-200/40 dark:border-slate-800 bg-white/95 dark:bg-brand-slate/95 backdrop-blur-xl p-4 space-y-2.5 shadow-lg">
+            
+            {/* Theme switcher on mobile */}
+            <div className="pb-2 border-b border-orange-100 dark:border-slate-800">
+              <p className="text-[10px] font-mono font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider pl-2 mb-1.5">
+                Mode d'affichage
+              </p>
+              <ThemeToggle variant="segmented" />
+            </div>
+
+            <p className="text-[10px] font-mono font-black text-orange-900/60 dark:text-orange-400/80 uppercase tracking-wider pl-2 mb-1">
               Navigation
             </p>
             {navItems.map((item) => {
@@ -344,11 +370,11 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                   to={item.path}
                   className={`flex items-center gap-3 p-3 rounded-xl font-bold text-xs transition-all ${
                     isActive 
-                      ? 'bg-orange-500/20 text-orange-900 border border-orange-300/40' 
-                      : 'text-slate-700 hover:bg-orange-500/10'
+                      ? 'bg-orange-500/20 text-orange-900 dark:text-orange-400 border border-orange-300/40 dark:border-orange-500/30' 
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-orange-500/10 dark:hover:bg-slate-800/60'
                   }`}
                 >
-                  <Icon className="w-4.5 h-4.5 text-slate-500" />
+                  <Icon className="w-4.5 h-4.5 text-slate-500 dark:text-slate-400" />
                   <span>{item.label}</span>
                 </Link>
               );
@@ -356,13 +382,13 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
             
             {/* Event creation in mobile menu only for organizers */}
             {isOrganizer && (
-              <div className="pt-2 border-t border-orange-100">
+              <div className="pt-2 border-t border-orange-100 dark:border-slate-800">
                 <Link
                   to="/organisateur/creer"
                   className={`flex items-center gap-3 p-3 rounded-xl font-bold text-xs transition-all ${
                     path === '/organisateur/creer'
-                      ? 'bg-emerald-500/20 text-emerald-900 border border-emerald-300/40'
-                      : 'text-emerald-800 bg-emerald-50/80 hover:bg-emerald-100'
+                      ? 'bg-emerald-500/20 text-emerald-900 dark:text-emerald-400 border border-emerald-300/40'
+                      : 'text-emerald-800 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100'
                   }`}
                 >
                   <PlusCircle className="w-4.5 h-4.5 text-emerald-600" />
@@ -382,7 +408,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
       </main>
 
       {/* ================= MODERN EXPANSIVE FOOTER ================= */}
-      <footer className="w-full bg-slate-900 text-slate-400 py-12 shrink-0 mt-auto border-t border-slate-800">
+      <footer className="w-full bg-slate-900 dark:bg-brand-dark text-slate-400 py-12 shrink-0 mt-auto border-t border-slate-800 dark:border-slate-800/80">
         <div className="w-full max-w-[1560px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8 text-left">
             
@@ -454,7 +480,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
       </footer>
 
       {/* ================= FIXED STABLE MOBILE BOTTOM BAR ================= */}
-      <nav aria-label="Navigation mobile" className="md:hidden fixed bottom-0 left-0 right-0 z-40 w-full bg-white/95 bg-gradient-to-r from-orange-500/15 via-white to-orange-500/15 backdrop-blur-xl border-t border-orange-200/80 px-3 pt-2 pb-[calc(0.6rem+env(safe-area-inset-bottom,0px))] flex items-center justify-around shrink-0 shadow-[0_-4px_24px_-2px_rgba(249,115,22,0.14)]">
+      <nav aria-label="Navigation mobile" className="md:hidden fixed bottom-0 left-0 right-0 z-40 w-full bg-white/95 dark:bg-brand-dark/95 bg-gradient-to-r from-orange-500/15 via-white dark:via-brand-dark to-orange-500/15 backdrop-blur-xl border-t border-orange-200/80 dark:border-slate-800 px-3 pt-2 pb-[calc(0.6rem+env(safe-area-inset-bottom,0px))] flex items-center justify-around shrink-0 shadow-[0_-4px_24px_-2px_rgba(249,115,22,0.14)]">
         {navItems.map((item) => {
           const isActive = path === item.path;
           const Icon = item.icon;
@@ -463,7 +489,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
               key={item.path}
               to={item.path}
               className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-all ${
-                isActive ? 'text-orange-600 font-bold' : 'text-slate-600 hover:text-orange-950'
+                isActive ? 'text-orange-600 dark:text-orange-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:text-orange-950 dark:hover:text-white'
               }`}
             >
               <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5px]' : 'stroke-[2px]'}`} />
@@ -478,15 +504,15 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end transition-all duration-300">
           <div className="absolute inset-0" onClick={() => setShowNotifications(false)} />
           
-          <div className="relative bg-white rounded-t-[32px] max-w-lg w-full mx-auto max-h-[85vh] flex flex-col overflow-hidden shadow-2xl z-10 border-t border-slate-200 animate-slide-up">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div className="relative bg-white dark:bg-brand-slate rounded-t-[32px] max-w-lg w-full mx-auto max-h-[85vh] flex flex-col overflow-hidden shadow-2xl z-10 border-t border-slate-200 dark:border-slate-800 animate-slide-up">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <Bell className="w-5 h-5 text-orange-600" />
-                <h3 className="text-sm font-display font-extrabold text-slate-900 tracking-tight">Notifications IwacuTix</h3>
+                <h3 className="text-sm font-display font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">Notifications IwacuTix</h3>
               </div>
               <button 
                 onClick={() => setShowNotifications(false)}
-                className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+                className="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>

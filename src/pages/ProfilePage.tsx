@@ -29,10 +29,12 @@ import {
   Check,
   Edit3,
   X,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Sun
 } from 'lucide-react';
 import { AuthModal } from '../components/AuthModal';
 import { PWAInstallButton } from '../components/PWAInstallButton';
+import { ThemeToggle } from '../components/ThemeToggle';
 import { getStoredAccessToken, API_BASE_URL } from '../services/apiClient';
 import { DEFAULT_ANONYMOUS_AVATAR } from '../data';
 
@@ -170,11 +172,11 @@ export const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#F8FAFC]">
+    <div className="flex-1 flex flex-col bg-[#F8FAFC] dark:bg-brand-dark transition-colors duration-200">
       
       {/* Top Header */}
-      <div className="px-5 pt-4 pb-2 sticky top-0 bg-white/95 backdrop-blur-md z-30 border-b border-slate-200/80 shadow-sm flex items-center justify-between">
-        <h2 className="text-xl font-display font-bold text-slate-900 tracking-tight">Mon Profil</h2>
+      <div className="px-5 pt-4 pb-2 sticky top-0 bg-white/95 dark:bg-brand-dark/95 backdrop-blur-md z-30 border-b border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between">
+        <h2 className="text-xl font-display font-bold text-slate-900 dark:text-slate-100 tracking-tight">Mon Profil</h2>
         <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase ${
           user.role === 'SUPERADMIN' 
             ? 'bg-purple-100 text-purple-800 border border-purple-200' 
@@ -526,9 +528,27 @@ export const ProfilePage: React.FC = () => {
           </div>
         </div>
 
+        {/* Appearance & Dark Mode Settings Card */}
+        <div className="p-4 bg-white dark:bg-brand-slate border border-slate-200/90 dark:border-slate-800 rounded-2xl space-y-3 shadow-sm text-left">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200/60 dark:border-orange-500/30 text-brand-primary shrink-0">
+              <Sun className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                Thème & Affichage
+              </h4>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                Palette IwacuTix avec noir profond (#090A0F) et ardoise nuit (#0F172A)
+              </p>
+            </div>
+          </div>
+          <ThemeToggle variant="segmented" />
+        </div>
+
         {/* Menu Options List */}
         <div className="space-y-2">
-          <h4 className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider pl-1 font-semibold">COMPTE & SÉCURITÉ</h4>
+          <h4 className="text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pl-1 font-semibold">COMPTE & SÉCURITÉ</h4>
           <div className="space-y-2">
             {profileOptions.map((opt, idx) => {
               const Icon = opt.icon;
@@ -537,17 +557,17 @@ export const ProfilePage: React.FC = () => {
                   key={idx}
                   id={`profile-row-option-${idx}`}
                   onClick={opt.action}
-                  className="p-3.5 bg-white hover:bg-slate-50/50 border border-slate-200 rounded-xl flex items-center justify-between cursor-pointer group transition-all shadow-sm hover:border-slate-300"
+                  className="p-3.5 bg-white dark:bg-brand-slate hover:bg-slate-50/50 dark:hover:bg-slate-800/60 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between cursor-pointer group transition-all shadow-sm hover:border-slate-300 dark:hover:border-slate-700"
                 >
                   <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 text-brand-primary shrink-0 group-hover:scale-105 transition-transform">
+                    <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-brand-primary shrink-0 group-hover:scale-105 transition-transform">
                       <Icon className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-800 group-hover:text-brand-primary transition-colors truncate">
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-brand-primary transition-colors truncate">
                         {opt.label}
                       </p>
-                      <p className="text-[10px] text-slate-500 truncate mt-0.5">{opt.description}</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">{opt.description}</p>
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />

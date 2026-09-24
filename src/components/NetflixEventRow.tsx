@@ -52,18 +52,18 @@ export const NetflixEventRow: React.FC<NetflixEventRowProps> = ({
       <div className="flex items-end justify-between px-1">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
-            <h3 className="font-display font-black text-base sm:text-lg text-slate-900 tracking-tight flex items-center gap-2">
+            <h3 className="font-display font-black text-base sm:text-lg text-slate-900 dark:text-slate-100 tracking-tight flex items-center gap-2">
               <Icon className="w-5 h-5 text-amber-500 fill-amber-500/20" />
               <span>{title}</span>
             </h3>
             {badge && (
-              <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700 border border-amber-500/20">
+              <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
                 {badge}
               </span>
             )}
           </div>
           {subtitle && (
-            <p className="text-xs text-slate-500 font-medium">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
               {subtitle}
             </p>
           )}
@@ -73,14 +73,14 @@ export const NetflixEventRow: React.FC<NetflixEventRowProps> = ({
         <div className="hidden sm:flex items-center gap-1.5 opacity-70 group-hover/row:opacity-100 transition-opacity">
           <button
             onClick={() => scroll('left')}
-            className="p-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/80 shadow-sm active:scale-95 transition-all cursor-pointer"
+            className="p-1.5 rounded-xl bg-white dark:bg-brand-slate hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-800 shadow-sm active:scale-95 transition-all cursor-pointer"
             title="Défiler vers la gauche"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={() => scroll('right')}
-            className="p-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/80 shadow-sm active:scale-95 transition-all cursor-pointer"
+            className="p-1.5 rounded-xl bg-white dark:bg-brand-slate hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-800 shadow-sm active:scale-95 transition-all cursor-pointer"
             title="Défiler vers la droite"
           >
             <ChevronRight className="w-4 h-4" />
@@ -98,12 +98,12 @@ export const NetflixEventRow: React.FC<NetflixEventRowProps> = ({
             key={evt.id}
             id={`netflix-card-${evt.id}`}
             onClick={() => navigate(`/evenement/${evt.id}`)}
-            className="relative shrink-0 w-[240px] sm:w-[280px] md:w-[300px] lg:w-[320px] bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-xl hover:border-amber-400/50 hover:-translate-y-1 transition-all duration-300 cursor-pointer group/card"
+            className="relative shrink-0 w-[240px] sm:w-[280px] md:w-[300px] lg:w-[320px] bg-white dark:bg-brand-slate rounded-2xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden shadow-sm hover:shadow-xl hover:border-amber-400/50 dark:hover:border-amber-500/50 hover:-translate-y-1 transition-all duration-300 cursor-pointer group/card"
           >
             {/* If Netflix style ranking number is enabled (#1, #2, #3, ...) */}
             {showRankNumber && (
               <div className="absolute -top-3 -left-2 z-20 pointer-events-none select-none">
-                <span className="font-display font-black text-6xl text-slate-900/10 italic leading-none block">
+                <span className="font-display font-black text-6xl text-slate-900/10 dark:text-white/10 italic leading-none block">
                   {idx + 1}
                 </span>
               </div>
@@ -132,27 +132,27 @@ export const NetflixEventRow: React.FC<NetflixEventRowProps> = ({
 
             {/* Card Information */}
             <div className="p-3.5 space-y-2">
-              <h4 className="font-display font-bold text-sm text-slate-900 leading-snug line-clamp-1 group-hover/card:text-orange-600 transition-colors">
+              <h4 className="font-display font-bold text-sm text-slate-900 dark:text-slate-100 leading-snug line-clamp-1 group-hover/card:text-orange-600 dark:group-hover/card:text-orange-400 transition-colors">
                 {evt.title}
               </h4>
 
-              <div className="space-y-1 text-xs text-slate-600 font-medium">
+              <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300 font-medium">
                 <div className="flex items-center gap-1.5 truncate">
                   <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                   <span className="truncate">{evt.date}</span>
                 </div>
-                <div className="flex items-center gap-1.5 truncate text-slate-500">
+                <div className="flex items-center gap-1.5 truncate text-slate-500 dark:text-slate-400">
                   <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <span className="truncate">{evt.location.split(',')[0]}</span>
                 </div>
               </div>
 
               {/* Action row */}
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                <span className="text-[10px] font-mono text-slate-400 font-semibold uppercase truncate">
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 font-semibold uppercase truncate">
                   {evt.organisateur.split(' ')[0]}
                 </span>
-                <span className="inline-flex items-center gap-1 text-xs font-bold text-orange-600 group-hover/card:translate-x-0.5 transition-transform">
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-orange-600 dark:text-orange-400 group-hover/card:translate-x-0.5 transition-transform">
                   Réserver
                   <Ticket className="w-3.5 h-3.5" />
                 </span>

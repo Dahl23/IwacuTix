@@ -185,24 +185,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="w-full max-w-sm bg-white dark:bg-brand-slate rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* Header */}
-        <div className="p-4 pb-3 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-4 pb-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-orange-100 text-brand-primary flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950/50 text-brand-primary flex items-center justify-center">
               <ShieldCheck className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-display font-bold text-slate-900 text-sm">
+              <h3 className="font-display font-bold text-slate-900 dark:text-slate-100 text-sm">
                 {step === 'PHONE' ? 'Création de compte / Connexion' : 'Vérification du numéro'}
               </h3>
-              <p className="text-[10px] text-slate-400 font-mono">Billetterie sécurisée IwacuTix</p>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">Billetterie sécurisée IwacuTix</p>
             </div>
           </div>
           <button 
             onClick={onClose} 
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -210,31 +210,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Contextual notification banners */}
         {contextReason === 'RESERVATION' && (
-          <div className="bg-orange-500/10 border-b border-orange-200/60 px-4 py-2.5 flex items-start gap-2.5">
+          <div className="bg-orange-500/10 border-b border-orange-200/60 dark:border-orange-500/20 px-4 py-2.5 flex items-start gap-2.5">
             <Ticket className="w-4 h-4 text-brand-primary shrink-0 mt-0.5" />
-            <p className="text-[11px] text-orange-950 leading-snug">
+            <p className="text-[11px] text-orange-950 dark:text-orange-200 leading-snug">
               <strong>Réservation en cours :</strong> Créez votre compte en renseignant votre <strong>nom, prénom</strong> et <strong>numéro</strong> pour recevoir vos billets et QR codes.
             </p>
           </div>
         )}
 
         {contextReason === 'ORGANISATEUR' && (
-          <div className="bg-indigo-50 border-b border-indigo-100 px-4 py-2.5 flex items-start gap-2.5">
+          <div className="bg-indigo-50 dark:bg-indigo-950/40 border-b border-indigo-100 dark:border-indigo-800/60 px-4 py-2.5 flex items-start gap-2.5">
             <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-indigo-950 leading-snug">
+            <p className="text-[11px] text-indigo-950 dark:text-indigo-200 leading-snug">
               <strong>Étape préalable obligatoire :</strong> Vous devez d'abord créer et vérifier votre compte acheteur avec votre numéro de téléphone avant d'activer votre espace organisateur.
             </p>
           </div>
         )}
 
         {/* Tab switcher */}
-        <div className="p-2.5 bg-slate-50 border-b border-slate-100 grid grid-cols-2 gap-2">
+        <div className="p-2.5 bg-slate-50 dark:bg-brand-dark border-b border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-2">
           <button
             onClick={() => { setTab('ACHETEUR'); setError(null); }}
             className={`py-2 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               tab === 'ACHETEUR'
-                ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-white dark:bg-brand-slate text-slate-900 dark:text-white shadow-sm border border-slate-200 dark:border-slate-700'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
             <Smartphone className="w-3.5 h-3.5 text-brand-primary" />
@@ -244,8 +244,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             onClick={() => { setTab('ORGANISATEUR'); setError(null); }}
             className={`py-2 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               tab === 'ORGANISATEUR'
-                ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-white dark:bg-brand-slate text-slate-900 dark:text-white shadow-sm border border-slate-200 dark:border-slate-700'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
             <Building2 className="w-3.5 h-3.5 text-indigo-600" />
