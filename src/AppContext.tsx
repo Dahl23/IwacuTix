@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { 
   CartItem, 
   TicketPurchased, 
@@ -24,10 +24,9 @@ import {
   MOCK_VERSEMENTS,
   MOCK_SCAN_LOGS,
   MOCK_ORGANISATEURS_KYC,
+  DEFAULT_ANONYMOUS_AVATAR,
   GUEST_USER
 } from './data';
-import { api, API_BASE_URL, clearStoredTokens, getStoredAccessToken } from './services/apiClient';
-import { apiEventToEvent, apiTicketToPurchased, apiUserToUser } from './services/apiMappers';
 
 export type PersonaType = 'ACHETEUR' | 'ORGANISATEUR' | 'SCANNEUR' | 'SUPERADMIN';
 
@@ -44,26 +43,12 @@ interface AppContextType {
   switchPersona: (persona: PersonaType) => void;
   cart: CartItem[];
   tickets: TicketPurchased[];
-  refreshTicketsFromApi: () => Promise<TicketPurchased[]>;
   events: Event[];
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   selectedCategory: string;
   setSelectedCategory: (cat: string) => void;
-  addToCart: (
-    eventId: string,
-    eventTitle: string,
-    categoryName: string,
-    quantity: number,
-    price: number,
-    options?: {
-      tierId?: string;
-      eventDate?: string;
-      eventTime?: string;
-      eventLocation?: string;
-      moyens_paiement_acceptes?: ('LUMICASH' | 'LIGHTNING')[];
-    }
-  ) => void;
+  addToCart: (eventId: string, eventTitle: string, categoryName: string, quantity: number, price: number) => void;
   updateCartQuantity: (eventId: string, categoryName: string, quantity: number) => void;
   removeFromCart: (eventId: string, categoryName: string) => void;
   clearCart: () => void;
@@ -152,9 +137,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAuthModalReason(undefined);
   };
   
-  // IwacuTix always opens in public visitor mode: a session is only established
-  // through explicit account creation or login within the current session.
-  const [user, setUser] = useState<User>(GUEST_USER);
+  // Load saved custom profile if exists and verified; otherwise, default to unauthenticated visitor (GUEST_USER)
+  const [user, setUser] = useState<User>(() => {
+    try {
+      const saved = localStorage.getItem('iwacutix_user_profile');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // User must be verified with a valid phone number and real id
+        if (parsed && parsed.telephone_verifie === true && parsed.phone && parsed.phone.trim().length > 0 && parsed.id !== 'guest') {
+          if (!parsed.avatarUrl || parsed.avatarUrl.includes('photo-1534528741775-53994a69daeb')) {
+            parsed.avatarUrl = DEFAULT_ANONYMOUS_AVATAR;
+          }
+          return { ...GUEST_USER, ...parsed };
+        }
+      }
+    } catch {}
+    // First-time visitor has no account created yet
+    return GUEST_USER;
+  });
 
   // Is user verified with real name, phone, and OTP SMS verification?
   const isUserVerified = Boolean(
@@ -179,7 +179,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       localStorage.removeItem('iwacutix_user_profile');
     } catch {}
-    clearStoredTokens();
     setUser(GUEST_USER);
     setCurrentPersona('ACHETEUR');
   };
@@ -198,94 +197,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [versements, setVersements] = useState<Versement[]>(MOCK_VERSEMENTS);
   const [scanLogs, setScanLogs] = useState<ScanLog[]>(MOCK_SCAN_LOGS);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadPublicEvents = async () => {
-      try {
-        const response = await api.public.getEvenements();
-        const detailedEvents = await Promise.all(
-          response.results.map(async (eventSummary, index) => {
-            try {
-              const detail = await api.public.getEvenement(eventSummary.id);
-              const mapped = apiEventToEvent(detail, API_BASE_URL);
-              return {
-                ...mapped,
-                isFeatured: index < 2,
-              };
-            } catch {
-              const mapped = apiEventToEvent(eventSummary, API_BASE_URL);
-              return {
-                ...mapped,
-                isFeatured: index < 2,
-              };
-            }
-          })
-        );
-
-        if (isMounted && detailedEvents.length > 0) {
-          setEvents(detailedEvents);
-        }
-      } catch {
-        // The API client already falls back to mock data when the backend is offline.
-      }
-    };
-
-    loadPublicEvents();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const refreshTicketsFromApi = async (): Promise<TicketPurchased[]> => {
-    try {
-      const response = await api.tickets.getMesBillets();
-      const mappedTickets = response.results.map((ticket) => apiTicketToPurchased(ticket, events));
-      setTickets(mappedTickets);
-      return mappedTickets;
-    } catch {
-      return tickets;
-    }
-  };
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const restoreSession = async () => {
-      if (!getStoredAccessToken()) {
-        try {
-          const saved = localStorage.getItem('iwacutix_user_profile');
-          if (saved && isMounted) {
-            setUser(JSON.parse(saved));
-          }
-        } catch {}
-        return;
-      }
-
-      try {
-        const me = await api.auth.me();
-        if (!isMounted) return;
-
-        setUser((prev) => apiUserToUser(me, prev, API_BASE_URL));
-        setCurrentPersona(me.role === 'SUPERADMIN' ? 'SUPERADMIN' : me.role === 'ORGANISATEUR' ? 'ORGANISATEUR' : 'ACHETEUR');
-        await refreshTicketsFromApi();
-      } catch {
-        if (isMounted) {
-          clearStoredTokens();
-          setUser(GUEST_USER);
-          setCurrentPersona('ACHETEUR');
-        }
-      }
-    };
-
-    restoreSession();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   const [notifications, setNotifications] = useState<AppNotification[]>([
     {
       id: 'notif-1',
@@ -300,7 +211,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     {
       id: 'notif-2',
       title: 'Bienvenue sur IwacuTix Burundi ! 🎫',
-      body: 'La billetterie 100% digitale du Burundi. Payez via Lumicash ou Bitcoin Lightning (Blink).',
+      body: 'La billetterie 100% digitale du Burundi. Payez via Lumicash, EcoCash, Bancobu ou Bitcoin Lightning (Blink).',
       date: 'Hier',
       type: 'system',
       read: true,
@@ -340,23 +251,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const addToCart = (
-    eventId: string,
-    eventTitle: string,
-    categoryName: string,
-    quantity: number,
-    price: number,
-    options?: {
-      tierId?: string;
-      eventDate?: string;
-      eventTime?: string;
-      eventLocation?: string;
-      moyens_paiement_acceptes?: ('LUMICASH' | 'LIGHTNING')[];
-    }
-  ) => {
+  const addToCart = (eventId: string, eventTitle: string, categoryName: string, quantity: number, price: number) => {
     setCart((prevCart) => {
       const existingIndex = prevCart.findIndex(
-        (item) => item.eventId === eventId && item.categoryName === categoryName && item.tierId === options?.tierId
+        (item) => item.eventId === eventId && item.categoryName === categoryName
       );
 
       if (existingIndex > -1) {
@@ -365,21 +263,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return newCart;
       }
 
-      return [
-        ...prevCart,
-        {
-          eventId,
-          eventTitle,
-          categoryName,
-          quantity,
-          price,
-          tierId: options?.tierId,
-          eventDate: options?.eventDate,
-          eventTime: options?.eventTime,
-          eventLocation: options?.eventLocation,
-          moyens_paiement_acceptes: options?.moyens_paiement_acceptes,
-        },
-      ];
+      return [...prevCart, { eventId, eventTitle, categoryName, quantity, price }];
     });
   };
 
@@ -713,7 +597,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         email: kycData.email,
         statut_verification: 'VERIFIE' as const,
         commission_taux: 5,
-        moyens: [`Lumicash (${user.phone})`, `Blink Lightning`]
+        moyens: [`Mobile Money (${user.phone})`, `Blink Lightning`]
       },
       ...prev
     ]);
@@ -794,7 +678,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         switchPersona,
         cart,
         tickets,
-        refreshTicketsFromApi,
         events,
         searchQuery,
         setSearchQuery,

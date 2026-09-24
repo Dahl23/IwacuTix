@@ -16,8 +16,8 @@ export const OnboardingPage: React.FC = () => {
       tag: 'EXPLORER'
     },
     {
-      title: 'Payez simplement',
-      description: 'Achetez vos places en Francs Burundais via Lumicash ou en sats via Lightning / Blink. Un processus 100% sécurisé et traçable.',
+      title: 'Payez avec Mobile Money',
+      description: 'Achetez vos places instantanément en Francs Burundais (FBu) via Lumicash, EcoCash, ou Bancobu Mobile. Un processus 100% sécurisé et traçable.',
       icon: ShieldCheck,
       color: 'text-emerald-600 bg-emerald-50 border-emerald-200/80',
       tag: 'TRANSPARENCE'

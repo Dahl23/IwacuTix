@@ -1,38 +1,44 @@
-import {
-  ApiAuthResponse,
+import { 
+  ApiAuthResponse, 
+  ApiCommandePayload, 
+  ApiCommandeResponse, 
   ApiCommandeOrder,
-  ApiCommandePayload,
-  ApiCommandeResponse,
-  ApiErrorResponse,
-  ApiEvenementPublic,
-  ApiLumicashConfirmerResponse,
-  ApiLumicashDemanderOtpPayload,
-  ApiLumicashDemanderOtpResponse,
-  ApiMedia,
-  ApiPaymentMethod,
-  ApiScanResult,
-  ApiTicket,
-  ApiTier,
-  ApiUser,
+  ApiErrorResponse, 
+  ApiEvenementPublic, 
+  ApiScanResult, 
+  ApiTicket, 
+  ApiTier, 
+  ApiMedia, 
   PaginatedResponse,
+  PortefeuilleOrganisateur,
   ParametrePlateforme,
-  ScanneurAssignment,
+  Versement,
+  ScanneurAssignment
 } from '../types';
-import { MOCK_EVENTS, MOCK_PURCHASED_TICKETS } from '../data';
+import { MOCK_EVENTS } from '../data';
 
+// Configuration de l'URL de base selon la documentation
+// URL de base développement : http://127.0.0.1:8000
+// Remplacer selon VITE_API_BASE_URL en production
 const metaEnv = (import.meta as unknown as { env?: Record<string, string> }).env;
 export const API_BASE_URL = metaEnv?.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 const ACCESS_TOKEN_KEY = 'iwacutix_access_token';
 const REFRESH_TOKEN_KEY = 'iwacutix_refresh_token';
 
+// État de connexion détecté
 let isBackendLive: boolean | null = null;
-let refreshInFlight: Promise<string | null> | null = null;
 
 export const getApiConnectionStatus = (): boolean | null => isBackendLive;
 
-export const getStoredAccessToken = (): string | null => localStorage.getItem(ACCESS_TOKEN_KEY);
-export const getStoredRefreshToken = (): string | null => localStorage.getItem(REFRESH_TOKEN_KEY);
+// Gestion du stockage des jetons JWT
+export const getStoredAccessToken = (): string | null => {
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
+};
+
+export const getStoredRefreshToken = (): string | null => {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+};
 
 export const setStoredTokens = (access: string, refresh: string) => {
   localStorage.setItem(ACCESS_TOKEN_KEY, access);
@@ -44,83 +50,111 @@ export const clearStoredTokens = () => {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
 };
 
-const isFormData = (value: unknown): value is FormData => {
-  return typeof FormData !== 'undefined' && value instanceof FormData;
+// Variable pour gérer le rafraîchissement "single-flight" des tokens
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+const subscribeTokenRefresh = (cb: (token: string) => void) => {
+  refreshSubscribers.push(cb);
 };
 
-const isAuthEndpointWithoutRefresh = (endpoint: string) => {
-  return (
-    endpoint.includes('/api/auth/login/') ||
-    endpoint.includes('/api/auth/verifier-otp/') ||
-    endpoint.includes('/api/auth/demander-otp/') ||
-    endpoint.includes('/api/auth/token/refresh/')
+const onTokenRefreshed = (token: string) => {
+  refreshSubscribers.forEach((cb) => cb(token));
+  refreshSubscribers = [];
+};
+
+/**
+ * Calculateur HMAC-SHA256 en Web Crypto API pour simuler les webhooks Mobile Money en dev
+ */
+export async function computeHmacSha256Hex(secret: string, message: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await window.crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
   );
-};
+  const signature = await window.crypto.subtle.sign('HMAC', key, enc.encode(message));
+  const hashArray = Array.from(new Uint8Array(signature));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
-const refreshAccessToken = async (): Promise<string | null> => {
-  const refresh = getStoredRefreshToken();
-  if (!refresh) return null;
-
-  if (!refreshInFlight) {
-    refreshInFlight = fetch(`${API_BASE_URL}/api/auth/token/refresh/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh }),
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          clearStoredTokens();
-          return null;
-        }
-
-        const data = (await response.json()) as { access: string; refresh: string };
-        setStoredTokens(data.access, data.refresh);
-        return data.access;
-      })
-      .catch(() => {
-        clearStoredTokens();
-        return null;
-      })
-      .finally(() => {
-        refreshInFlight = null;
-      });
-  }
-
-  return refreshInFlight;
-};
-
-async function request<T>(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<T> {
+/**
+ * Client HTTP centralisé avec interception JWT et fallback résilient
+ */
+async function request<T>(
+  endpoint: string, 
+  options: RequestInit = {}, 
+  isRetry = false
+): Promise<T> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   const headers = new Headers(options.headers || {});
 
-  const access = getStoredAccessToken();
-  if (access && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${access}`);
+  // Injection du Bearer token si présent
+  const accessToken = getStoredAccessToken();
+  if (accessToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
+  // Content-Type par défaut si body JSON
   if (options.body && typeof options.body === 'string' && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
-  if (isFormData(options.body) && headers.has('Content-Type')) {
-    headers.delete('Content-Type');
-  }
-
   try {
-    const response = await fetch(url, { ...options, headers });
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
     isBackendLive = true;
 
-    if (response.status === 401 && !isRetry && !isAuthEndpointWithoutRefresh(endpoint)) {
-      const newAccess = await refreshAccessToken();
-      if (newAccess) {
-        const retryHeaders = new Headers(options.headers || {});
-        retryHeaders.set('Authorization', `Bearer ${newAccess}`);
-        return request<T>(endpoint, { ...options, headers: retryHeaders }, true);
+    // Gestion du 401 JWT et rafraîchissement ROTATE_REFRESH_TOKENS
+    if (response.status === 401 && !isRetry && !endpoint.includes('/auth/login/') && !endpoint.includes('/auth/verifier-otp/')) {
+      const refreshToken = getStoredRefreshToken();
+      if (refreshToken) {
+        if (!isRefreshing) {
+          isRefreshing = true;
+          try {
+            const refreshRes = await fetch(`${API_BASE_URL}/api/auth/token/refresh/`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refresh: refreshToken }),
+            });
+
+            if (refreshRes.ok) {
+              const data = await refreshRes.json();
+              setStoredTokens(data.access, data.refresh);
+              onTokenRefreshed(data.access);
+              isRefreshing = false;
+              // Rejouer la requête d'origine avec le nouveau token
+              return request<T>(endpoint, options, true);
+            } else {
+              clearStoredTokens();
+              isRefreshing = false;
+            }
+          } catch {
+            isRefreshing = false;
+            clearStoredTokens();
+          }
+        } else {
+          // Attendre la résolution du single-flight en cours
+          return new Promise<T>((resolve, reject) => {
+            subscribeTokenRefresh((newToken) => {
+              const retryHeaders = new Headers(options.headers || {});
+              retryHeaders.set('Authorization', `Bearer ${newToken}`);
+              request<T>(endpoint, { ...options, headers: retryHeaders }, true)
+                .then(resolve)
+                .catch(reject);
+            });
+          });
+        }
       }
     }
 
     if (!response.ok) {
-      let errorBody: ApiErrorResponse | Record<string, string[]>;
+      let errorBody: any;
       try {
         errorBody = await response.json();
       } catch {
@@ -133,206 +167,41 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
       return {} as T;
     }
 
-    return (await response.json()) as T;
+    return await response.json();
   } catch (err: any) {
-    if (err instanceof TypeError && /fetch|network/i.test(err.message || '')) {
+    // Si le serveur local Django (127.0.0.1:8000) n'est pas démarré, fallback gracieux
+    if (err instanceof TypeError && err.message.includes('fetch')) {
       isBackendLive = false;
-      console.warn(`[IwacuTix API] Backend ${API_BASE_URL} non joignable. Fallback local active.`);
+      console.warn(`[IwacuTix API] Backend ${API_BASE_URL} non joignable. Utilisation du fallback simulé conforme API_FRONTEND.md`);
       return mockFallback<T>(endpoint, options);
     }
-
     throw err;
   }
 }
 
-const pageUrl = (endpoint: string, page?: number) => {
-  if (!page) return endpoint;
-  return `${endpoint}?page=${page}`;
-};
-
-const readJsonBody = (options: RequestInit): any => {
-  if (!options.body || typeof options.body !== 'string') return {};
-  try {
-    return JSON.parse(options.body);
-  } catch {
-    return {};
-  }
-};
-
-const makePaginated = <T>(results: T[]): PaginatedResponse<T> => ({
-  count: results.length,
-  next: null,
-  previous: null,
-  results,
-});
-
-const mockTierId = (eventId: string, index: number) => `tier-${eventId}-${index + 1}`;
-
-const mockEventDate = (index: number) => {
-  const date = new Date(Date.UTC(2026, 11, 1 + index, 18, 0, 0));
-  return date.toISOString();
-};
-
-const mockEventToApi = (event: (typeof MOCK_EVENTS)[number], index = 0, withDetails = false): ApiEvenementPublic => ({
-  id: event.id,
-  titre: event.title,
-  description: event.description,
-  affiche: event.imageUrl,
-  lieu: event.location,
-  ville: event.location.includes(',') ? event.location.split(',').at(-1)?.trim() || 'Bujumbura' : 'Bujumbura',
-  date_debut: mockEventDate(index),
-  date_fin: null,
-  categorie:
-    event.category === 'sport'
-      ? 'SPORT'
-      : event.category === 'musique'
-        ? 'CONCERT'
-        : event.category === 'religion'
-          ? 'RELIGIEUX'
-          : 'CONFERENCE',
-  organisateur: event.organisateur,
-  tiers: withDetails
-    ? event.ticketCategories.map((category, categoryIndex) => ({
-        id: mockTierId(event.id, categoryIndex),
-        nom: category.name,
-        prix_fbu: category.price.toFixed(2),
-        stock_disponible: category.available,
-        stock_total: category.available + 50,
-        moyens_paiement_acceptes: ['LUMICASH', 'LIGHTNING'] as ApiPaymentMethod[],
-      }))
-    : undefined,
-  medias: withDetails
-    ? [
-        {
-          id: `media-${event.id}`,
-          type_media: 'IMAGE',
-          fichier: event.imageUrl,
-          url_externe: '',
-          ordre: 0,
-          date_ajout: new Date().toISOString(),
-        },
-      ]
-    : undefined,
-});
-
-const findMockEventAndTier = (eventId: string, tierId: string) => {
-  const event = MOCK_EVENTS.find((item) => item.id === eventId) || MOCK_EVENTS[0];
-  const tierIndex = event.ticketCategories.findIndex((_, index) => mockTierId(event.id, index) === tierId);
-  const category = event.ticketCategories[tierIndex >= 0 ? tierIndex : 0];
-  return { event, category };
-};
-
-const mockPurchasedAsApiTickets = (): ApiTicket[] =>
-  MOCK_PURCHASED_TICKETS.map((ticket) => ({
-    id: ticket.id,
-    event_titre: ticket.eventTitle,
-    tiers_lib: ticket.categoryName,
-    qr_code_hash: ticket.qr_code_hash || ticket.qrCodeValue,
-    statut: ticket.status === 'utilise' ? 'UTILISE' : 'VALIDE',
-    destinataire_nom: ticket.recipientName || null,
-    destinataire_telephone: ticket.recipientPhone || null,
-  }));
-
-type StoredMockOrder = ApiCommandeOrder & {
-  payload: ApiCommandePayload | ApiLumicashDemanderOtpPayload;
-  polls: number;
-  ticketsIssued: boolean;
-};
-
-const mockOrders = new Map<string, StoredMockOrder>();
-let mockTickets: ApiTicket[] = mockPurchasedAsApiTickets();
-
-const createMockOrder = (
-  payload: ApiCommandePayload | ApiLumicashDemanderOtpPayload,
-  method: ApiPaymentMethod
-): StoredMockOrder => {
-  const { event, category } = findMockEventAndTier(payload.event_id, payload.tier_id);
-  const quantity = Number(payload.quantite || 1);
-  const totalFbu = category.price * quantity;
-  const totalSats = Math.max(1, Math.round(totalFbu * 4.415));
-  const id =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `order-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  const order: StoredMockOrder = {
-    id,
-    event_titre: event.title,
-    tiers_lib: category.name,
-    quantite: quantity,
-    montant_fbu: totalFbu.toFixed(2),
-    montant_fbu_affiche: totalFbu.toFixed(2),
-    montant_sats: method === 'LIGHTNING' ? totalSats : null,
-    montant_total_sats: method === 'LIGHTNING' ? totalSats : null,
-    moyen_paiement: method,
-    statut: 'PENDING',
-    expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-    date_creation: new Date().toISOString(),
-    date_paiement: null,
-    statut_reglement_commission: 'EN_ATTENTE',
-    tentatives_reglement_commission: 0,
-    statut_reglement_organisateur: 'EN_ATTENTE',
-    tentatives_reglement_organisateur: 0,
-    payload,
-    polls: 0,
-    ticketsIssued: false,
-  };
-
-  mockOrders.set(order.id, order);
-  return order;
-};
-
-const issueMockTickets = (order: StoredMockOrder) => {
-  if (order.ticketsIssued) return;
-
-  const newTickets: ApiTicket[] = Array.from({ length: order.quantite }).map((_, index) => {
-    const recipient = order.payload.destinataires?.[index];
-    const ticketId =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `ticket-${Date.now()}-${index}`;
-
-    return {
-      id: ticketId,
-      event_titre: order.event_titre,
-      tiers_lib: order.tiers_lib,
-      qr_code_hash: `${ticketId}.${Math.random().toString(36).slice(2, 18)}`,
-      statut: 'VALIDE',
-      destinataire_nom: recipient?.nom || null,
-      destinataire_telephone: recipient?.telephone || null,
-    };
-  });
-
-  mockTickets = [...newTickets, ...mockTickets];
-  order.ticketsIssued = true;
-};
-
-const completeMockOrder = (order: StoredMockOrder) => {
-  order.statut = 'SUCCESS';
-  order.date_paiement = new Date().toISOString();
-  order.statut_reglement_commission = 'REUSSI';
-  order.statut_reglement_organisateur = 'REUSSI';
-  issueMockTickets(order);
-};
-
-async function mockFallback<T>(endpoint: string, options: RequestInit): Promise<T> {
+/**
+ * Fallback haute-fidélité pour tester et visualiser l'app dans le navigateur
+ * lorsque l'environnement local Django tourne sur une machine séparée.
+ */
+function mockFallback<T>(endpoint: string, options: RequestInit): Promise<T> {
   const method = (options.method || 'GET').toUpperCase();
-  const body = readJsonBody(options);
+  const body = options.body ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body) : {};
 
+  // 1. Authentification
   if (endpoint.includes('/api/auth/demander-otp/')) {
-    return {
+    return Promise.resolve({
       message: 'Code OTP envoyé.',
       telephone: body.telephone || '+25779123456',
-    } as T;
+    } as unknown as T);
   }
 
   if (endpoint.includes('/api/auth/verifier-otp/')) {
-    const auth: ApiAuthResponse = {
-      access: `mock_access_${Date.now()}`,
-      refresh: `mock_refresh_${Date.now()}`,
+    const mockAuth: ApiAuthResponse = {
+      access: 'mock_jwt_access_token_' + Date.now(),
+      refresh: 'mock_jwt_refresh_token_' + Date.now(),
       user: {
         id: '9f1a2b3c-4d5e-6f70-8192-a1b2c3d4e5f6',
-        nom_complet: 'Acheteur IwacuTix',
+        nom_complet: 'Jean Ntakirutimana (Client OTP)',
         email: null,
         telephone: body.telephone || '+25779123456',
         role: 'ACHETEUR',
@@ -341,163 +210,168 @@ async function mockFallback<T>(endpoint: string, options: RequestInit): Promise<
         date_creation: new Date().toISOString(),
       },
     };
-    setStoredTokens(auth.access, auth.refresh);
-    return auth as T;
+    setStoredTokens(mockAuth.access, mockAuth.refresh);
+    return Promise.resolve(mockAuth as unknown as T);
   }
 
   if (endpoint.includes('/api/auth/login/')) {
-    const isAdmin = String(body.identifiant || '').toLowerCase().includes('admin');
-    const auth: ApiAuthResponse = {
-      access: `mock_access_${Date.now()}`,
-      refresh: `mock_refresh_${Date.now()}`,
+    const isSuperAdmin = body.identifiant?.toLowerCase().includes('admin');
+    const mockAuth: ApiAuthResponse = {
+      access: 'mock_jwt_access_token_' + Date.now(),
+      refresh: 'mock_jwt_refresh_token_' + Date.now(),
       user: {
-        id: isAdmin ? '11111111-1111-1111-1111-111111111111' : '88888888-8888-8888-8888-888888888888',
-        nom_complet: isAdmin ? 'SuperAdmin IwacuTix' : 'Iwacu Events SA',
-        email: String(body.identifiant || 'contact@iwacutix.bi').includes('@') ? body.identifiant : 'contact@iwacutix.bi',
+        id: isSuperAdmin ? '11111111-1111-1111-1111-111111111111' : '88888888-8888-8888-8888-888888888888',
+        nom_complet: isSuperAdmin ? 'SuperAdmin HQ IwacuTix' : 'Iwacu Events SA (Organisateur)',
+        email: body.identifiant?.includes('@') ? body.identifiant : 'contact@iwacutix.bi',
         telephone: '+25770000000',
-        role: isAdmin ? 'SUPERADMIN' : 'ORGANISATEUR',
+        role: isSuperAdmin ? 'SUPERADMIN' : 'ORGANISATEUR',
         statut_compte: 'ACTIF',
         telephone_verifie: true,
         date_creation: new Date().toISOString(),
       },
     };
-    setStoredTokens(auth.access, auth.refresh);
-    return auth as T;
+    setStoredTokens(mockAuth.access, mockAuth.refresh);
+    return Promise.resolve(mockAuth as unknown as T);
   }
 
-  if (endpoint.includes('/api/auth/me/')) {
-    return {
-      id: '9f1a2b3c-4d5e-6f70-8192-a1b2c3d4e5f6',
-      nom_complet: 'Acheteur IwacuTix',
-      email: null,
-      telephone: '+25779123456',
-      role: 'ACHETEUR',
-      statut_compte: 'ACTIF',
-      telephone_verifie: true,
-      date_creation: new Date().toISOString(),
-      url_photo_profil: '/static/img/avatar-defaut.svg',
-    } as T;
-  }
-
-  const tiersMatch = endpoint.match(/\/api\/public\/evenements\/([^/?]+)\/tiers\//);
-  if (tiersMatch) {
-    const event = MOCK_EVENTS.find((item) => item.id === tiersMatch[1]) || MOCK_EVENTS[0];
-    const detail = mockEventToApi(event, MOCK_EVENTS.indexOf(event), true);
-    return makePaginated(detail.tiers || []) as T;
-  }
-
-  const detailMatch = endpoint.match(/\/api\/public\/evenements\/([^/?]+)\//);
-  if (detailMatch) {
-    const event = MOCK_EVENTS.find((item) => item.id === detailMatch[1]) || MOCK_EVENTS[0];
-    return mockEventToApi(event, MOCK_EVENTS.indexOf(event), true) as T;
-  }
-
+  // 2. Marketplace publique des événements
   if (endpoint.startsWith('/api/public/evenements/')) {
-    return makePaginated(MOCK_EVENTS.map((event, index) => mockEventToApi(event, index, false))) as T;
+    const idMatch = endpoint.match(/\/api\/public\/evenements\/([a-zA-Z0-9_-]+)\//);
+    if (idMatch) {
+      const evtId = idMatch[1];
+      const found = MOCK_EVENTS.find((e) => e.id === evtId) || MOCK_EVENTS[0];
+      const detailed: ApiEvenementPublic = {
+        id: found.id,
+        titre: found.title,
+        description: found.description,
+        affiche: found.imageUrl,
+        lieu: found.location,
+        ville: 'Bujumbura',
+        date_debut: '2026-12-01T18:00:00Z',
+        date_fin: null,
+        categorie: (found.category.toUpperCase() as any) || 'CONCERT',
+        organisateur: found.organisateur,
+        tiers: found.ticketCategories.map((tc, idx) => ({
+          id: `tier-uuid-${idx + 1}`,
+          nom: tc.name,
+          prix_fbu: tc.price.toFixed(2),
+          stock_disponible: tc.available,
+          stock_total: tc.available + 50,
+          moyens_paiement_acceptes: tc.moyens_paiement_acceptes || ['LUMICASH', 'ECOCASH', 'LIGHTNING'],
+        })),
+        medias: [
+          {
+            id: 'media-yt-demo',
+            type_media: 'VIDEO',
+            fichier: null,
+            url_externe: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            ordre: 0,
+            date_ajout: '2026-09-20T09:00:00Z',
+          },
+        ],
+      };
+      return Promise.resolve(detailed as unknown as T);
+    }
+
+    // Liste paginée
+    const listResponse: PaginatedResponse<ApiEvenementPublic> = {
+      count: MOCK_EVENTS.length,
+      next: null,
+      previous: null,
+      results: MOCK_EVENTS.map((e) => ({
+        id: e.id,
+        titre: e.title,
+        description: e.description,
+        affiche: e.imageUrl,
+        lieu: e.location,
+        ville: 'Bujumbura',
+        date_debut: '2026-12-01T18:00:00Z',
+        date_fin: null,
+        categorie: (e.category.toUpperCase() as any) || 'CONCERT',
+        organisateur: e.organisateur,
+      })),
+    };
+    return Promise.resolve(listResponse as unknown as T);
   }
 
-  if (endpoint.includes('/api/tickets/commandes/lumicash/demander-otp/') && method === 'POST') {
-    const order = createMockOrder(body as ApiLumicashDemanderOtpPayload, 'LUMICASH');
-    return {
-      order,
-      next: '/api/tickets/commandes/lumicash/confirmer/',
-      paiement: {
-        type: 'lumicash_onramp',
-        provider: 'bitlibera',
-        montant_fbu: order.montant_fbu,
-        instruction: "Un OTP Lumicash vient d'etre envoye par SMS. Confirmez avec l'OTP.",
+  // 3. Commandes & Billets
+  if (endpoint.includes('/api/tickets/commandes/') && method === 'POST') {
+    const isLightning = body.moyen_paiement === 'LIGHTNING';
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes de réservation
+    const orderId = 'order-' + Math.random().toString(36).substring(2, 9);
+
+    const mockResponse: ApiCommandeResponse = {
+      order: {
+        id: orderId,
+        event_titre: 'Concert & Match IwacuTix',
+        tiers_lib: 'Tribune Standard',
+        quantite: body.quantite || 1,
+        montant_fbu: (30000 * (body.quantite || 1)).toFixed(2),
+        montant_sats: isLightning ? 132450 * (body.quantite || 1) : null,
+        moyen_paiement: body.moyen_paiement || 'LUMICASH',
+        statut: 'PENDING',
+        expires_at: expiresAt,
+        date_creation: new Date().toISOString(),
       },
-    } as T;
+      paiement: isLightning
+        ? {
+            type: 'lightning',
+            provider: 'blink',
+            paymentRequest: 'lnbc132450n1pj' + Math.random().toString(36).substring(2, 20),
+            paymentHash: 'hash-' + Math.random().toString(36).substring(2, 10),
+            satoshis: 132450 * (body.quantite || 1),
+            montant_sats: 132450 * (body.quantite || 1),
+            taux_fbu_vers_sats: '0.0044150',
+            expires_at: expiresAt,
+          }
+        : {
+            type: 'mobile_money',
+            provider: body.moyen_paiement || 'LUMICASH',
+            reference: `${body.moyen_paiement || 'LUMICASH'}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+            montant_fbu: (30000 * (body.quantite || 1)).toFixed(2),
+            telephone_client: '+25779123456',
+            expires_at: expiresAt,
+            instruction: 'Confirmez le paiement sur votre téléphone via USSD.',
+          },
+    };
+    return Promise.resolve(mockResponse as unknown as T);
   }
 
-  if (endpoint.includes('/api/tickets/commandes/lumicash/confirmer/') && method === 'POST') {
-    const order = mockOrders.get(body.order_id);
-    if (!order) {
-      throw { error: 'Commande introuvable ou ne vous appartenant pas.', code: 'not_found' };
+  // Validation scan billet
+  if (endpoint.includes('/api/tickets/valider/')) {
+    const qr = body.qr_code || '';
+    if (qr.includes('utilise')) {
+      const res: ApiScanResult = {
+        statut: 'REJETE',
+        error: 'Ce billet a déjà été utilisé à la porte.',
+        code: 'ticket_deja_scanne',
+      };
+      return Promise.resolve(res as unknown as T);
     }
-    completeMockOrder(order);
-    return {
-      order,
-      message: 'Paiement confirmé et billets émis.',
-    } as T;
-  }
-
-  if (endpoint === '/api/tickets/commandes/' && method === 'POST') {
-    const order = createMockOrder(body as ApiCommandePayload, 'LIGHTNING');
-    return {
-      order,
-      paiement: {
-        type: 'lightning',
-        provider: 'blink',
-        paymentRequest: `lnbc${order.montant_total_sats || 1}n1p${Math.random().toString(36).slice(2, 22)}`,
-        paymentHash: Math.random().toString(16).slice(2, 34),
-        satoshis: order.montant_total_sats || 1,
-        montant_sats: order.montant_total_sats || 1,
-        taux_fbu_vers_sats: '0.0044150',
-        expires_at: order.expires_at,
+    const res: ApiScanResult = {
+      statut: 'ACCEPTE',
+      ticket: {
+        id: 'BTK-' + Math.random().toString(36).substring(2, 6).toUpperCase(),
+        event_titre: 'Événement IwacuTix Officiel',
+        tiers_lib: 'Place Validée',
+        qr_code_hash: qr,
+        statut: 'VALIDE',
+        destinataire_nom: null,
+        destinataire_telephone: null,
       },
-    } as T;
+    };
+    return Promise.resolve(res as unknown as T);
   }
 
-  const commandDetailMatch = endpoint.match(/\/api\/tickets\/commandes\/([^/?]+)\//);
-  if (commandDetailMatch && !endpoint.includes('/mes/')) {
-    const order = mockOrders.get(commandDetailMatch[1]);
-    if (!order) throw { error: 'Commande introuvable ou ne vous appartenant pas.', code: 'not_found' };
-    order.polls += 1;
-    if (order.moyen_paiement === 'LIGHTNING' && order.polls >= 2 && order.statut === 'PENDING') {
-      completeMockOrder(order);
-    }
-    return order as T;
-  }
-
-  if (endpoint.startsWith('/api/tickets/commandes/mes/')) {
-    return makePaginated(Array.from(mockOrders.values())) as T;
-  }
-
-  if (endpoint.startsWith('/api/tickets/mes-billets/')) {
-    return makePaginated(mockTickets) as T;
-  }
-
-  if (endpoint.includes('/api/tickets/valider/') && method === 'POST') {
-    const qr = String(body.qr_code || '').trim();
-    const ticket = mockTickets.find((item) => item.qr_code_hash === qr || item.id === qr);
-    if (!ticket) {
-      return { statut: 'REJETE', error: 'Billet invalide', code: 'ticket_invalide' } as T;
-    }
-    if (ticket.statut === 'UTILISE') {
-      return { statut: 'REJETE', error: 'Deja scanne', code: 'ticket_deja_scanne' } as T;
-    }
-    ticket.statut = 'UTILISE';
-    return { statut: 'ACCEPTE', ticket } as T;
-  }
-
-  if (endpoint.includes('/api/organisateurs/mon-profil/')) {
-    return {
-      id: 'org-mock-1',
-      telephone: '+25770000000',
-      email: 'contact@iwacutix.bi',
-      nom_entreprise: 'Iwacu Events',
-      canal_reception: 'LIGHTNING',
-      destination_reception: 'org@blink.sv',
-      statut_verification: 'VERIFIE',
-      commission_taux: '0.0200',
-    } as T;
-  }
-
-  if (endpoint.includes('/api/admin/parametres-plateforme/')) {
-    return {
-      id: '11111111-1111-1111-1111-111111111111',
-      commission_taux_defaut: '0.0200',
-      canal_commission: 'LIGHTNING',
-      destination_commission: 'superadmin@blink.sv',
-      date_modification: new Date().toISOString(),
-    } as T;
-  }
-
-  return {} as T;
+  return Promise.resolve({} as T);
 }
 
+// ---------------------------------------------------------------------------
+// SERVICE API COMPLET ET EXPORTABLE
+// ---------------------------------------------------------------------------
+
 export const api = {
+  // 1. Authentification (Section 1)
   auth: {
     demanderOtp: (telephone: string) =>
       request<{ message: string; telephone: string }>('/api/auth/demander-otp/', {
@@ -523,40 +397,23 @@ export const api = {
         body: JSON.stringify({ refresh }),
       }),
 
-    me: () => request<ApiUser>('/api/auth/me/'),
-
-    updatePhotoProfil: (data: FormData) =>
-      request<ApiUser>('/api/auth/me/photo-profil/', {
-        method: 'PATCH',
-        body: data,
-      }),
-
-    deletePhotoProfil: () =>
-      request<ApiUser>('/api/auth/me/photo-profil/', {
-        method: 'DELETE',
-      }),
-
-    logout: clearStoredTokens,
+    me: () => request<ApiAuthResponse['user']>('/api/auth/me/'),
+    logout: () => clearStoredTokens(),
   },
 
+  // 2. Organisateurs (Section 2)
   organisateurs: {
     getMonProfil: () => request<any>('/api/organisateurs/mon-profil/'),
-    updateMonProfil: (data: FormData | Record<string, unknown>) =>
+    updateMonProfil: (data: any) =>
       request<any>('/api/organisateurs/mon-profil/', {
         method: 'PUT',
-        body: isFormData(data) ? data : JSON.stringify(data),
+        body: data instanceof FormData ? data : JSON.stringify(data),
       }),
-    getStats: () => request<any>('/api/organisateurs/mon-profil/stats/'),
-    soumettreDemande: (data: FormData) =>
-      request<any>('/api/organisateurs/demandes/', {
-        method: 'POST',
-        body: data,
-      }),
-    getMesDemandes: () => request<any[]>('/api/organisateurs/demandes/mes/'),
-    getScanneurs: (organisateurId: string, eventId?: string) => {
-      const query = eventId ? `?event_id=${encodeURIComponent(eventId)}` : '';
-      return request<PaginatedResponse<ScanneurAssignment>>(`/api/organisateurs/${organisateurId}/scanneurs/${query}`);
-    },
+    getMonPortefeuille: () => request<PortefeuilleOrganisateur>('/api/organisateurs/mon-portefeuille/'),
+    getScanneurs: (organisateurId: string, eventId?: string) =>
+      request<PaginatedResponse<ScanneurAssignment>>(
+        `/api/organisateurs/${organisateurId}/scanneurs/${eventId ? `?event_id=${eventId}` : ''}`
+      ),
     assignerScanneur: (organisateurId: string, payload: { telephone_ou_user_id: string; event_id: string }) =>
       request<ScanneurAssignment>(`/api/organisateurs/${organisateurId}/scanneurs/assigner/`, {
         method: 'POST',
@@ -568,22 +425,16 @@ export const api = {
       }),
   },
 
+  // 3. Événements (Section 3)
   public: {
-    getEvenements: (params?: {
-      categorie?: string;
-      ville?: string;
-      date_min?: string;
-      date_max?: string;
-      q?: string;
-      page?: number;
-    }) => {
+    getEvenements: (params?: { categorie?: string; ville?: string; date_min?: string; date_max?: string; q?: string; page?: number }) => {
       const search = new URLSearchParams();
-      if (params?.categorie && params.categorie !== 'Tous') search.set('categorie', params.categorie);
+      if (params?.categorie) search.set('categorie', params.categorie);
       if (params?.ville) search.set('ville', params.ville);
       if (params?.date_min) search.set('date_min', params.date_min);
       if (params?.date_max) search.set('date_max', params.date_max);
       if (params?.q) search.set('q', params.q);
-      if (params?.page) search.set('page', String(params.page));
+      if (params?.page) search.set('page', params.page.toString());
       const query = search.toString();
       return request<PaginatedResponse<ApiEvenementPublic>>(`/api/public/evenements/${query ? `?${query}` : ''}`);
     },
@@ -592,34 +443,33 @@ export const api = {
   },
 
   events: {
-    getMyEvents: (page?: number) => request<PaginatedResponse<any>>(pageUrl('/api/organisateurs/events/', page)),
-    createEvent: (data: FormData | Record<string, unknown>) =>
+    getMyEvents: () => request<PaginatedResponse<any>>('/api/organisateurs/events/'),
+    createEvent: (data: any) =>
       request<any>('/api/organisateurs/events/', {
         method: 'POST',
-        body: isFormData(data) ? data : JSON.stringify(data),
+        body: data instanceof FormData ? data : JSON.stringify(data),
       }),
     getEvent: (id: string) => request<any>(`/api/organisateurs/events/${id}/`),
-    updateEvent: (id: string, data: FormData | Record<string, unknown>) =>
+    updateEvent: (id: string, data: any) =>
       request<any>(`/api/organisateurs/events/${id}/`, {
         method: 'PATCH',
-        body: isFormData(data) ? data : JSON.stringify(data),
+        body: data instanceof FormData ? data : JSON.stringify(data),
       }),
     deleteEvent: (id: string) =>
       request<void>(`/api/organisateurs/events/${id}/`, {
         method: 'DELETE',
       }),
-    getTiers: (eventId: string) => request<PaginatedResponse<ApiTier>>(`/api/organisateurs/events/${eventId}/tiers/`),
-    createTier: (eventId: string, data: Record<string, unknown>) =>
+    getTiers: (eventId: string) => request<ApiTier[]>(`/api/organisateurs/events/${eventId}/tiers/`),
+    createTier: (eventId: string, data: any) =>
       request<ApiTier>(`/api/organisateurs/events/${eventId}/tiers/`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    getMedias: (eventId: string) =>
-      request<PaginatedResponse<ApiMedia>>(`/api/organisateurs/events/${eventId}/medias/`),
-    addMedia: (eventId: string, data: FormData | Record<string, unknown>) =>
+    getMedias: (eventId: string) => request<PaginatedResponse<ApiMedia>>(`/api/organisateurs/events/${eventId}/medias/`),
+    addMedia: (eventId: string, data: any) =>
       request<ApiMedia>(`/api/organisateurs/events/${eventId}/medias/`, {
         method: 'POST',
-        body: isFormData(data) ? data : JSON.stringify(data),
+        body: data instanceof FormData ? data : JSON.stringify(data),
       }),
     deleteMedia: (eventId: string, mediaId: string) =>
       request<void>(`/api/organisateurs/events/${eventId}/medias/${mediaId}/`, {
@@ -630,37 +480,21 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ media_ids: mediaIds }),
       }),
-    getScanLogs: (eventId: string, statutValidation?: 'ACCEPTE' | 'REJETE') => {
-      const query = statutValidation ? `?statut_validation=${statutValidation}` : '';
-      return request<any>(`/api/organisateurs/events/${eventId}/logs-scan/${query}`);
-    },
   },
 
+  // 4. Commandes & Billets (Section 5)
   tickets: {
-    creerCommande: (payload: ApiCommandePayload & { moyen_paiement: 'LIGHTNING' }) =>
+    creerCommande: (payload: ApiCommandePayload) =>
       request<ApiCommandeResponse>('/api/tickets/commandes/', {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
 
-    demanderOtpLumicash: (payload: ApiLumicashDemanderOtpPayload) =>
-      request<ApiLumicashDemanderOtpResponse>('/api/tickets/commandes/lumicash/demander-otp/', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      }),
-
-    confirmerLumicash: (orderId: string, otp: string) =>
-      request<ApiLumicashConfirmerResponse>('/api/tickets/commandes/lumicash/confirmer/', {
-        method: 'POST',
-        body: JSON.stringify({ order_id: orderId, otp }),
-      }),
-
     getCommandes: (page?: number) =>
-      request<PaginatedResponse<ApiCommandeOrder>>(pageUrl('/api/tickets/commandes/mes/', page)),
+      request<PaginatedResponse<ApiCommandeOrder>>(`/api/tickets/commandes/${page ? `?page=${page}` : ''}`),
 
-    getCommande: (id: string) => request<ApiCommandeOrder>(`/api/tickets/commandes/${id}/`),
-
-    getMesBillets: (page?: number) => request<PaginatedResponse<ApiTicket>>(pageUrl('/api/tickets/mes-billets/', page)),
+    getMesBillets: (page?: number) =>
+      request<PaginatedResponse<ApiTicket>>(`/api/tickets/mes-billets/${page ? `?page=${page}` : ''}`),
 
     valider: (qr_code: string) =>
       request<ApiScanResult>('/api/tickets/valider/', {
@@ -669,6 +503,29 @@ export const api = {
       }),
   },
 
+  // 5. Paiements & Webhooks dev (Section 6)
+  paiements: {
+    simulerWebhookMobileMoney: async (
+      provider: 'lumicash' | 'ecocash' | 'bancobu' | 'ihela',
+      reference: string,
+      statut: 'SUCCESS' | 'ECHEC' = 'SUCCESS'
+    ) => {
+      const secret = `${provider.toUpperCase()}-dev-secret`;
+      const body = JSON.stringify({ reference, statut });
+      const signature = await computeHmacSha256Hex(secret, body);
+
+      return request<{ message?: string }>(`/api/paiements/webhooks/${provider}/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-IwacuTix-Signature': signature,
+        },
+        body,
+      });
+    },
+  },
+
+  // 6. SuperAdmin (Section 8)
   admin: {
     getParametresPlateforme: () => request<ParametrePlateforme>('/api/admin/parametres-plateforme/'),
     updateParametresPlateforme: (data: Partial<ParametrePlateforme>) =>
@@ -676,28 +533,13 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
-    getStats: () => request<any>('/api/admin/stats/'),
-    getHistorique: (params?: { order?: string; type_evenement?: string; canal?: string; reference_externe?: string; page?: number }) => {
-      const search = new URLSearchParams();
-      if (params?.order) search.set('order', params.order);
-      if (params?.type_evenement) search.set('type_evenement', params.type_evenement);
-      if (params?.canal) search.set('canal', params.canal);
-      if (params?.reference_externe) search.set('reference_externe', params.reference_externe);
-      if (params?.page) search.set('page', String(params.page));
-      const query = search.toString();
-      return request<any>(`/api/admin/historique/${query ? `?${query}` : ''}`);
-    },
-    getDemandesOrganisateurs: (params?: { statut?: string; user?: string }) => {
+    getVersements: (params?: { statut?: string; canal?: string; organisateur?: string }) => {
       const search = new URLSearchParams();
       if (params?.statut) search.set('statut', params.statut);
-      if (params?.user) search.set('user', params.user);
+      if (params?.canal) search.set('canal', params.canal);
+      if (params?.organisateur) search.set('organisateur', params.organisateur);
       const query = search.toString();
-      return request<any>(`/api/admin/organisateurs/demandes/${query ? `?${query}` : ''}`);
+      return request<PaginatedResponse<Versement>>(`/api/admin/versements/${query ? `?${query}` : ''}`);
     },
-    deciderDemandeOrganisateur: (id: string, data: { statut: 'APPROUVE' | 'REJETE'; motif_rejet?: string }) =>
-      request<any>(`/api/admin/organisateurs/demandes/${id}/decider/`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
   },
 };

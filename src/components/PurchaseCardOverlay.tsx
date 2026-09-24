@@ -70,7 +70,7 @@ export const PurchaseCardOverlay: React.FC<PurchaseCardOverlayProps> = ({ onClos
         stepNumber: 3,
         totalSteps: 3,
         title: "Paiement sécurisé",
-        subtitle: "Lightning / Blink ou Lumicash",
+        subtitle: "Blink Lightning ⚡, Lumicash, EcoCash, Bancobu",
         icon: CreditCard,
       };
     }
@@ -79,7 +79,7 @@ export const PurchaseCardOverlay: React.FC<PurchaseCardOverlayProps> = ({ onClos
         stepNumber: 3,
         totalSteps: 3,
         title: "Validation en cours",
-        subtitle: "Confirmation serveur sécurisée",
+        subtitle: "Réseau Lightning / Mobile Money",
         icon: Smartphone,
       };
     }

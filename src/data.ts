@@ -68,7 +68,7 @@ export const MOCK_EVENTS: Event[] = [
   {
     id: 'evt-burundi-tech-summit',
     title: 'Burundi Tech Summit 2026',
-    description: 'Le rendez-vous incontournable des décideurs, startups et investisseurs de la tech au Burundi. Conférences inspirantes, panels de discussion sur l\'intelligence artificielle, la fintech Lumicash et ateliers pratiques.',
+    description: 'Le rendez-vous incontournable des décideurs, startups et investisseurs de la tech au Burundi. Conférences inspirantes, panels de discussion sur l\'intelligence artificielle, la fintech (Mobile Money) et ateliers pratiques.',
     category: 'corporate',
     imageUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=600&auto=format&fit=crop&q=80',
     date: 'Jeudi 13 Août 2026',
@@ -319,7 +319,7 @@ export const MOCK_ORGANISATEURS_KYC = [
     email: 'contact@vitalofc.bi',
     statut_verification: 'VERIFIE' as const,
     commission_taux: 5,
-    moyens: ['Lumicash (+257 69 999 888)', 'Lightning (vitalo@blink.sv)']
+    moyens: ['Mobile Money (+257 69 999 888)', 'Lightning (vitalo@blink.sv)']
   },
   {
     id: 'usr-org-empire',
@@ -329,7 +329,7 @@ export const MOCK_ORGANISATEURS_KYC = [
     email: 'info@empireavenue.bi',
     statut_verification: 'VERIFIE' as const,
     commission_taux: 5,
-    moyens: ['Lumicash (+257 69 111 222)', 'Lightning (empire@blink.sv)']
+    moyens: ['Mobile Money (+257 69 111 222)', 'Lightning (empire@blink.sv)']
   },
   {
     id: 'usr-org-croisade',
@@ -339,7 +339,7 @@ export const MOCK_ORGANISATEURS_KYC = [
     email: 'contact@kigobe-mission.org',
     statut_verification: 'EN_ATTENTE' as const,
     commission_taux: 5,
-    moyens: ['Lumicash (+257 79 888 777)']
+    moyens: ['Mobile Money (+257 79 888 777)']
   }
 ];
 
@@ -374,7 +374,7 @@ export const MOCK_PURCHASED_TICKETS: TicketPurchased[] = [
     purchaseDate: '8 Mai 2025',
     status: 'utilise',
     phoneUsed: '+257 69 123 456',
-    paymentMethod: 'Lumicash'
+    paymentMethod: 'EcoCash'
   },
   {
     id: 'ITX-1149-S5',

@@ -1,6 +1,5 @@
 export type UserRole = 'ACHETEUR' | 'ORGANISATEUR' | 'SUPERADMIN';
 export type UserAccountStatus = 'ACTIF' | 'SUSPENDU' | 'EN_ATTENTE_VERIFICATION';
-export type ApiPaymentMethod = 'LUMICASH' | 'LIGHTNING';
 
 export interface OrganisateurProfile {
   user_id: string;
@@ -95,14 +94,11 @@ export interface ScanLog {
 }
 
 export interface TicketCategory {
-  id?: string;
-  tierId?: string;
   name: string; // e.g. "Pelouse", "Tribune d'Honneur", "VIP", "VVIP"
   price: number; // in FBu
   description?: string;
   available: number;
-  stockTotal?: number;
-  moyens_paiement_acceptes?: ApiPaymentMethod[];
+  moyens_paiement_acceptes?: ('LUMICASH' | 'ECOCASH' | 'BANCOBU' | 'IHELA' | 'LIGHTNING')[];
 }
 
 export interface Event {
@@ -124,15 +120,10 @@ export interface Event {
 
 export interface CartItem {
   eventId: string;
-  tierId?: string;
   eventTitle: string;
-  eventDate?: string;
-  eventTime?: string;
-  eventLocation?: string;
   categoryName: string;
   quantity: number;
   price: number;
-  moyens_paiement_acceptes?: ApiPaymentMethod[];
 }
 
 export interface TicketPurchased {
@@ -189,20 +180,12 @@ export interface ApiAuthResponse {
     statut_compte: UserAccountStatus;
     telephone_verifie: boolean;
     date_creation: string;
+    url_photo_profil?: string | null;
   };
 }
 
-export interface ApiUser {
-  id: string;
-  nom_complet: string;
-  email: string | null;
-  telephone: string;
-  role: UserRole;
-  statut_compte: UserAccountStatus;
-  telephone_verifie: boolean;
-  date_creation: string;
-  url_photo_profil?: string;
-}
+export type ApiPaymentMethod = 'LUMICASH' | 'ECOCASH' | 'BANCOBU' | 'IHELA' | 'LIGHTNING';
+export type ApiUser = ApiAuthResponse['user'];
 
 export interface ApiErrorResponse {
   error: string;
@@ -216,7 +199,7 @@ export interface ApiTier {
   prix_fbu: string; // e.g. "30000.00"
   stock_disponible: number;
   stock_total: number;
-  moyens_paiement_acceptes: ApiPaymentMethod[];
+  moyens_paiement_acceptes: ('LUMICASH' | 'ECOCASH' | 'BANCOBU' | 'IHELA' | 'LIGHTNING')[];
 }
 
 export interface ApiMedia {
@@ -253,14 +236,7 @@ export interface ApiCommandePayload {
   event_id: string;
   tier_id: string;
   quantite: number;
-  moyen_paiement: ApiPaymentMethod;
-  destinataires?: ApiDestinataireBillet[];
-}
-
-export interface ApiLumicashDemanderOtpPayload {
-  event_id: string;
-  tier_id: string;
-  quantite: number;
+  moyen_paiement: 'LUMICASH' | 'ECOCASH' | 'BANCOBU' | 'IHELA' | 'LIGHTNING';
   destinataires?: ApiDestinataireBillet[];
 }
 
@@ -270,47 +246,31 @@ export interface ApiCommandeOrder {
   tiers_lib: string;
   quantite: number;
   montant_fbu: string;
-  montant_fbu_affiche?: string;
   montant_sats: number | null;
-  montant_total_sats?: number | null;
-  moyen_paiement: ApiPaymentMethod;
+  moyen_paiement: 'LUMICASH' | 'ECOCASH' | 'BANCOBU' | 'IHELA' | 'LIGHTNING';
   statut: 'PENDING' | 'SUCCESS' | 'ECHEC' | 'EXPIRE';
   expires_at: string;
   date_creation: string;
-  date_paiement?: string | null;
-  statut_reglement_commission?: 'EN_ATTENTE' | 'REUSSI' | 'ECHEC' | 'ECHEC_DEFINITIF';
-  tentatives_reglement_commission?: number;
-  statut_reglement_organisateur?: 'EN_ATTENTE' | 'REUSSI' | 'ECHEC' | 'ECHEC_DEFINITIF';
-  tentatives_reglement_organisateur?: number;
 }
 
 export interface ApiPaiementInstruction {
-  type: 'lightning' | 'lumicash_onramp';
-  provider: 'blink' | 'bitlibera' | string;
+  type: 'mobile_money' | 'lightning';
+  provider: string; // 'blink' | 'LUMICASH' | 'ECOCASH' | ...
+  reference?: string;
   paymentRequest?: string; // BOLT11 invoice lnbc...
   paymentHash?: string;
   satoshis?: number;
   montant_sats?: number;
   montant_fbu?: string;
   taux_fbu_vers_sats?: string;
+  telephone_client?: string;
   instruction?: string;
-  expires_at?: string;
+  expires_at: string;
 }
 
 export interface ApiCommandeResponse {
   order: ApiCommandeOrder;
   paiement: ApiPaiementInstruction;
-}
-
-export interface ApiLumicashDemanderOtpResponse {
-  order: ApiCommandeOrder;
-  next: string;
-  paiement: ApiPaiementInstruction;
-}
-
-export interface ApiLumicashConfirmerResponse {
-  order: ApiCommandeOrder;
-  message: string;
 }
 
 export interface ApiTicket {

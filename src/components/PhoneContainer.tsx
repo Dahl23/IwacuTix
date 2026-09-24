@@ -6,12 +6,13 @@ import {
   Sparkles, LogOut, Menu, X, PlusCircle,
   TrendingUp, Compass, Heart, Settings, ShieldCheck, HelpCircle,
   Clock, Megaphone, CheckCheck, Download,
-  ChevronDown, ArrowRight
+  ChevronDown, ArrowRight, LogIn
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { IwacuTixLogo } from './IwacuTixLogo';
 import { PWAInstallButton } from './PWAInstallButton';
 import { OfflineIndicator } from './OfflineIndicator';
+import { AuthModal } from './AuthModal';
 
 interface PhoneContainerProps {
   children: React.ReactNode;
@@ -32,7 +33,11 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
     currentPersona,
     switchPersona,
     isUserVerified,
-    openAuthModal
+    logoutUser,
+    isAuthModalOpen,
+    authModalReason,
+    openAuthModal,
+    closeAuthModal
   } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -75,54 +80,9 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
     : baseNavItems;
 
   if (isStandaloneScreen) {
-    // The "/" landing is the public events page: always browsable without an account
-    const isPublicLanding = path === '/';
     return (
-      <div className={`min-h-screen bg-[#F8FAFC] flex flex-col w-full antialiased text-slate-800 ${isPublicLanding ? '' : 'pt-[env(safe-area-inset-top)]'}`}>
-
-        {/* Public landing header with account actions (hidden for guest-only navigation, login/register CTA) */}
-        {isPublicLanding && (
-          <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-xl border-b border-orange-200/50 shadow-xs shrink-0 pt-[env(safe-area-inset-top)]">
-            <div className="w-full mx-auto max-w-[1400px] px-4 sm:px-6 md:px-8 lg:px-12 h-16 flex items-center justify-between gap-2">
-              <Link to="/home" className="flex items-center gap-2 active:scale-95 transition-all min-w-0">
-                <IwacuTixLogo size="sm" showTagline={true} />
-              </Link>
-
-              {isUserVerified ? (
-                <button
-                  onClick={() => navigate('/home')}
-                  className="flex items-center gap-2 p-1.5 pl-2 pr-3 rounded-full bg-white hover:bg-slate-50 border border-orange-200/70 hover:border-orange-300 transition-all shadow-xs cursor-pointer active:scale-95 group min-w-0"
-                  title="Mon espace"
-                >
-                  <div className="w-7 h-7 rounded-full overflow-hidden border border-orange-200 shrink-0">
-                    <img referrerPolicy="no-referrer" src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
-                  </div>
-                  <span className="hidden sm:block text-[11px] font-bold text-slate-800 truncate max-w-[120px]" title={user.name}>
-                    {user.name}
-                  </span>
-                  <ArrowRight className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                </button>
-              ) : (
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => openAuthModal('GENERAL')}
-                    className="hidden sm:inline-flex items-center px-3.5 py-2 rounded-xl border border-orange-300/70 text-orange-800 hover:bg-orange-50 font-bold text-xs transition-all cursor-pointer active:scale-95"
-                  >
-                    Se connecter
-                  </button>
-                  <button
-                    onClick={() => openAuthModal('GENERAL')}
-                    className="inline-flex items-center px-3.5 py-2 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs shadow-md shadow-orange-500/20 transition-all cursor-pointer active:scale-95"
-                  >
-                    Créer un compte
-                  </button>
-                </div>
-              )}
-            </div>
-          </header>
-        )}
-
-        <div className={`flex-1 w-full flex flex-col ${isPublicLanding ? 'mx-auto w-full max-w-[1400px] px-4 sm:px-6 md:px-8 lg:px-12 py-4 sm:py-6' : ''}`}>
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col w-full antialiased text-slate-800">
+        <div className="flex-1 w-full flex flex-col">
           {children}
         </div>
       </div>
@@ -133,9 +93,9 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col w-full antialiased text-slate-800 font-sans relative">
       <OfflineIndicator />
       
-      {/* ================= MODERN RESPONSIVE HEADER / NAVBAR ================= */}
-      <header className="sticky top-0 z-50 w-full bg-white/80 bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-orange-500/10 backdrop-blur-xl border-b border-orange-200/50 shadow-xs shrink-0 pt-[env(safe-area-inset-top)]">
-        <div className="w-full mx-auto max-w-[1400px] px-4 sm:px-6 md:px-8 lg:px-12 h-16 sm:h-18 flex items-center justify-between">
+      {/* ================= FIXED STABLE RESPONSIVE NAVBAR ================= */}
+      <header className="fixed top-0 left-0 right-0 z-50 w-full bg-white/95 bg-gradient-to-r from-orange-500/10 via-white to-orange-500/10 backdrop-blur-xl border-b border-orange-200/60 shadow-xs shrink-0 transition-all">
+        <div className="w-full max-w-[1560px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 h-16 sm:h-18 flex items-center justify-between">
           
           {/* Left: Branding & Logo */}
           <Link to="/home" className="flex items-center gap-3 active:scale-95 transition-all">
@@ -171,11 +131,15 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
             <div className="relative" ref={profileMenuRef}>
               <button
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                className="flex items-center gap-2.5 p-1.5 pl-2 pr-3 rounded-full bg-white/80 hover:bg-white border border-orange-200/70 hover:border-orange-300 transition-all shadow-xs cursor-pointer active:scale-95 group"
+                className={`flex items-center gap-2 p-1.5 pl-2 pr-3 rounded-full border transition-all shadow-xs cursor-pointer active:scale-95 group ${
+                  !isUserVerified
+                    ? 'bg-amber-50/90 hover:bg-amber-100/80 border-amber-300 text-amber-900'
+                    : 'bg-white/80 hover:bg-white border-orange-200/70 hover:border-orange-300 text-slate-800'
+                }`}
                 title="Menu utilisateur"
               >
                 <div className="relative">
-                  <div className="w-8 h-8 rounded-full overflow-hidden border border-orange-200 shrink-0 shadow-xs">
+                  <div className="w-8 h-8 rounded-full overflow-hidden border border-orange-200 shrink-0 shadow-xs bg-slate-100 flex items-center justify-center">
                     <img referrerPolicy="no-referrer" src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
                   </div>
                   {unreadNotifications > 0 && (
@@ -184,11 +148,11 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                 </div>
 
                 <div className="hidden sm:block text-left pr-0.5 max-w-[140px]">
-                  <p className="text-[11px] font-bold text-slate-800 leading-tight group-hover:text-brand-primary transition-colors truncate" title={user.name}>
-                    {user.name}
+                  <p className="text-[11px] font-bold leading-tight group-hover:text-brand-primary transition-colors truncate" title={user.name}>
+                    {isUserVerified ? user.name : 'Connexion'}
                   </p>
-                  <p className="text-[9px] font-mono font-semibold text-orange-600 uppercase leading-none">
-                    {isOrganizer ? 'Organisateur' : 'Acheteur'}
+                  <p className="text-[9px] font-mono font-semibold uppercase leading-none text-orange-600">
+                    {isUserVerified ? (isOrganizer ? 'Organisateur' : 'Acheteur') : 'Compte Invité'}
                   </p>
                 </div>
 
@@ -198,36 +162,67 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
               {/* Profile Dropdown Menu Card */}
               {profileMenuOpen && (
                 <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white/95 backdrop-blur-xl rounded-2xl border border-orange-200/80 shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                  
                   {/* Dropdown Header: Identity & Role Switch */}
                   <div className="p-3.5 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/5 border-b border-orange-100 flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl overflow-hidden border border-orange-200 shrink-0 shadow-xs">
                       <img referrerPolicy="no-referrer" src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-slate-900 truncate">{user.name}</p>
-                      <p className="text-[10px] text-slate-500 font-mono truncate">{user.email || user.phone}</p>
-                      <span className={`inline-block mt-0.5 text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded-md ${
-                        isOrganizer 
-                          ? 'bg-indigo-100 text-indigo-700' 
-                          : 'bg-orange-100 text-orange-700'
-                      }`}>
-                        {isOrganizer ? 'Compte Organisateur' : 'Compte Acheteur'}
-                      </span>
+                      <p className="text-xs font-bold text-slate-900 truncate">
+                        {isUserVerified ? user.name : 'Visiteur / Compte Invité'}
+                      </p>
+                      <p className="text-[10px] text-slate-500 font-mono truncate">
+                        {isUserVerified ? (user.phone || user.email) : 'Non connecté'}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className={`inline-block text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded-md ${
+                          !isUserVerified
+                            ? 'bg-amber-100 text-amber-800'
+                            : isOrganizer 
+                            ? 'bg-indigo-100 text-indigo-700' 
+                            : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {!isUserVerified ? 'Numéro non vérifié' : isOrganizer ? 'Compte Organisateur' : 'Acheteur Vérifié ✓'}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
                   {/* Dropdown Actions */}
                   <div className="p-2 space-y-0.5 text-xs">
-                    
-                    {/* Mon Profil */}
-                    <Link
-                      to="/profil"
-                      onClick={() => setProfileMenuOpen(false)}
-                      className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-orange-50/80 text-slate-700 hover:text-orange-950 font-medium transition-colors"
-                    >
-                      <UserIcon className="w-4 h-4 text-orange-600" />
-                      <span>Mon Profil & Photo</span>
-                    </Link>
+
+                    {/* If NOT verified: prominent button to create verified buyer account */}
+                    {!isUserVerified ? (
+                      <div className="p-2 bg-orange-50/80 rounded-xl border border-orange-200/60 mb-2 space-y-2">
+                        <div className="flex items-start gap-2">
+                          <ShieldCheck className="w-4 h-4 text-brand-primary shrink-0 mt-0.5" />
+                          <p className="text-[11px] text-orange-950 font-medium leading-snug">
+                            Créez votre compte acheteur avec vos nom, prénom et numéro pour réserver des billets.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setProfileMenuOpen(false);
+                            openAuthModal('GENERAL');
+                          }}
+                          className="w-full py-2 bg-brand-primary hover:bg-orange-600 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                        >
+                          <LogIn className="w-3.5 h-3.5" />
+                          <span>Créer mon compte / Se connecter</span>
+                        </button>
+                      </div>
+                    ) : (
+                      /* Mon Profil */
+                      <Link
+                        to="/profil"
+                        onClick={() => setProfileMenuOpen(false)}
+                        className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-orange-50/80 text-slate-700 hover:text-orange-950 font-medium transition-colors"
+                      >
+                        <UserIcon className="w-4 h-4 text-orange-600" />
+                        <span>Mon Profil & Photo</span>
+                      </Link>
+                    )}
 
                     {/* Notifications */}
                     <button
@@ -249,7 +244,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                       )}
                     </button>
 
-                    {/* Organizer Section: Only for Organizers */}
+                    {/* Organizer Section */}
                     {isOrganizer ? (
                       <div className="pt-1.5 pb-1 border-t border-slate-100 my-1">
                         <p className="text-[9px] font-mono font-bold uppercase tracking-wider text-indigo-900/60 px-2.5 py-1">
@@ -276,8 +271,12 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                       <div className="pt-1.5 pb-1 border-t border-slate-100 my-1">
                         <button
                           onClick={() => {
-                            switchPersona('ORGANISATEUR');
                             setProfileMenuOpen(false);
+                            if (!isUserVerified) {
+                              openAuthModal('ORGANISATEUR');
+                            } else {
+                              switchPersona('ORGANISATEUR');
+                            }
                           }}
                           className="w-full flex items-center justify-between p-2.5 rounded-xl bg-orange-50/80 hover:bg-orange-100 text-orange-900 font-bold transition-colors cursor-pointer text-left"
                         >
@@ -290,24 +289,28 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                       </div>
                     )}
 
-                    <div className="pt-1 border-t border-slate-100 my-1">
-                      <Link
-                        to="/profil"
-                        onClick={() => setProfileMenuOpen(false)}
-                        className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-100 text-slate-700 font-medium transition-colors"
-                      >
-                        <UserIcon className="w-4 h-4 text-slate-500" />
-                        <span>Mon Profil & Paramètres</span>
-                      </Link>
-<Link
-                        to="/"
-                        onClick={() => setProfileMenuOpen(false)}
-                        className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-rose-50 text-rose-600 font-medium transition-colors"
-                      >
-                        <LogOut className="w-4 h-4 text-rose-500" />
-                        <span>Déconnexion</span>
-                      </Link>
-                    </div>
+                    {isUserVerified && (
+                      <div className="pt-1 border-t border-slate-100 my-1">
+                        <Link
+                          to="/profil"
+                          onClick={() => setProfileMenuOpen(false)}
+                          className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-100 text-slate-700 font-medium transition-colors"
+                        >
+                          <UserIcon className="w-4 h-4 text-slate-500" />
+                          <span>Mon Profil & Paramètres</span>
+                        </Link>
+                        <button
+                          onClick={() => {
+                            setProfileMenuOpen(false);
+                            logoutUser();
+                          }}
+                          className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-rose-50 text-rose-600 font-medium transition-colors cursor-pointer text-left"
+                        >
+                          <LogOut className="w-4 h-4 text-rose-500" />
+                          <span>Déconnexion</span>
+                        </button>
+                      </div>
+                    )}
 
                   </div>
                 </div>
@@ -371,16 +374,16 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
         )}
       </header>
 
-      {/* ================= MAIN RESPONSIVE BODY CONTAINER ================= */}
-      <main className="flex-1 w-full flex flex-col">
-        <div className="w-full mx-auto max-w-[1400px] px-4 sm:px-6 md:px-8 lg:px-12 py-4 sm:py-6 flex flex-col flex-1">
+      {/* ================= MAIN RESPONSIVE EXPANSIVE CONTAINER ================= */}
+      <main className="flex-1 w-full flex flex-col min-w-0 pt-16 sm:pt-18">
+        <div className="w-full max-w-[1560px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 py-4 sm:py-6 flex flex-col flex-1 pb-24 md:pb-10 min-w-0">
           {children}
         </div>
       </main>
 
-      {/* ================= MODERN WEB FOOTER ================= */}
-      <footer className="w-full bg-slate-900 text-slate-400 py-12 px-4 sm:px-6 md:px-8 lg:px-12 shrink-0 mt-auto border-t border-slate-800">
-        <div className="w-full mx-auto max-w-[1400px]">
+      {/* ================= MODERN EXPANSIVE FOOTER ================= */}
+      <footer className="w-full bg-slate-900 text-slate-400 py-12 shrink-0 mt-auto border-t border-slate-800">
+        <div className="w-full max-w-[1560px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8 text-left">
             
             {/* Col 1: Brand Pitch */}
@@ -389,7 +392,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                 <IwacuTixLogo size="md" theme="dark" showTagline={false} />
               </div>
               <p className="text-xs text-slate-400 leading-relaxed font-normal">
-                <strong className="text-white font-bold">IwacuTix</strong> — Tes tickets, tes événements. La billetterie digitale et mobile de nouvelle génération au Burundi. Achetez vos tickets via Lumicash ou Lightning et vibrez au rythme des meilleurs concerts, festivals, matchs et spectacles.
+                <strong className="text-white font-bold">IwacuTix</strong> — Tes tickets, tes événements. La billetterie digitale et mobile de nouvelle génération au Burundi. Achetez vos tickets instantanément via Lumicash, EcoCash ou Bancobu et vibrez au rythme des meilleurs concerts, festivals, matchs et spectacles.
               </p>
             </div>
 
@@ -450,8 +453,8 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
         </div>
       </footer>
 
-      {/* ================= MOBILE EXCLUSIVE ACTION BAR (Optional but extremely high usability) ================= */}
-      <div className="md:hidden sticky bottom-0 z-50 w-full bg-white/80 bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-orange-500/15 backdrop-blur-xl border-t border-orange-300/40 px-4 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] flex items-center justify-around shrink-0 shadow-[0_-4px_16px_-2px_rgba(249,115,22,0.1)]">
+      {/* ================= FIXED STABLE MOBILE BOTTOM BAR ================= */}
+      <nav aria-label="Navigation mobile" className="md:hidden fixed bottom-0 left-0 right-0 z-40 w-full bg-white/95 bg-gradient-to-r from-orange-500/15 via-white to-orange-500/15 backdrop-blur-xl border-t border-orange-200/80 px-3 pt-2 pb-[calc(0.6rem+env(safe-area-inset-bottom,0px))] flex items-center justify-around shrink-0 shadow-[0_-4px_24px_-2px_rgba(249,115,22,0.14)]">
         {navItems.map((item) => {
           const isActive = path === item.path;
           const Icon = item.icon;
@@ -459,16 +462,16 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex flex-col items-center gap-0.5 px-1.5 py-1 rounded-xl transition-all min-w-0 flex-1 ${
+              className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-all ${
                 isActive ? 'text-orange-600 font-bold' : 'text-slate-600 hover:text-orange-950'
               }`}
             >
               <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5px]' : 'stroke-[2px]'}`} />
-              <span className="text-[9px] font-medium tracking-tight truncate w-full text-center">{item.label}</span>
+              <span className="text-[9px] font-medium tracking-tight">{item.label}</span>
             </Link>
           );
         })}
-      </div>
+      </nav>
 
       {/* ================= GLOBAL NOTIFICATIONS DRAWER ================= */}
       {showNotifications && (
@@ -564,7 +567,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
               )}
             </div>
 
-            <div className="px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-white border-t border-slate-100 flex items-center justify-between shrink-0">
+            <div className="px-5 py-4 bg-white border-t border-slate-100 flex items-center justify-between shrink-0">
               <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider">
                 {notifications?.length || 0} Notifications
               </span>
@@ -585,6 +588,13 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
 
       {/* ================= FLOATING PWA INSTALL BUTTON (BOTTOM-LEFT ON ALL PAGES) ================= */}
       <PWAInstallButton variant="floating" />
+
+      {/* ================= GLOBAL AUTH MODAL (OTP SMS VERIFICATION FOR BUYERS & ORGANIZERS) ================= */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={closeAuthModal}
+        contextReason={authModalReason}
+      />
 
     </div>
   );

@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { api } from '../services/apiClient';
-import { apiTicketToPurchased } from '../services/apiMappers';
 import { 
   ChevronLeft, 
   QrCode, 
@@ -26,8 +24,7 @@ export const ScannerPage: React.FC = () => {
     events, 
     tickets, 
     scanneurAssignments, 
-    scanTicketWithSecurity,
-    refreshTicketsFromApi,
+    scanTicketWithSecurity, 
     scanLogs 
   } = useApp();
 
@@ -51,50 +48,13 @@ export const ScannerPage: React.FC = () => {
     (a) => a.event_id === selectedEventId && a.actif && (a.user_id === user.id || a.user_telephone === user.phone)
   ) || user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN';
 
-  const handleScan = async (codeToScan?: string) => {
+  const handleScan = (codeToScan?: string) => {
     const code = codeToScan || inputCode;
     if (!code.trim()) return;
 
-    try {
-      const apiResult = await api.tickets.valider(code.trim());
-
-      if (apiResult.statut === 'ACCEPTE' && apiResult.ticket) {
-        const ticket = apiTicketToPurchased(apiResult.ticket, events);
-        setLastScanResult({
-          success: true,
-          message: `Entrée autorisée — ${apiResult.ticket.tiers_lib}`,
-          ticket,
-        });
-        await refreshTicketsFromApi();
-      } else {
-        setLastScanResult({
-          success: false,
-          message: apiResult.error || 'Billet rejeté',
-          reason: apiResult.code || 'validation_rejetee',
-        });
-      }
-    } catch (err: any) {
-      const codeMachine = err?.code || 'ticket_invalide';
-      const displayMessage =
-        codeMachine === 'ticket_deja_scanne'
-          ? 'Déjà scanné'
-          : codeMachine === 'acces_interdit'
-            ? 'Accès refusé au poste de scan'
-            : err?.error || 'Billet invalide';
-
-      setLastScanResult({
-        success: false,
-        message: displayMessage,
-        reason: err?.error || codeMachine,
-      });
-
-      if (!err?.code) {
-        const localResult = scanTicketWithSecurity(code.trim(), selectedEventId);
-        setLastScanResult(localResult);
-      }
-    } finally {
-      if (!codeToScan) setInputCode('');
-    }
+    const result = scanTicketWithSecurity(code.trim(), selectedEventId);
+    setLastScanResult(result);
+    if (!codeToScan) setInputCode('');
   };
 
   // Test ticket helpers
@@ -111,24 +71,24 @@ export const ScannerPage: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col bg-[#F8FAFC]">
       {/* Top Header */}
-      <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between gap-3 sticky top-0 z-20">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-20">
+        <div className="flex items-center gap-2">
           <button 
             onClick={() => navigate(-1)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors shrink-0"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <div className="min-w-0">
-            <h1 className="font-display font-bold text-slate-900 text-sm truncate">Poste de Contrôle & Scan</h1>
-            <p className="text-[10px] text-slate-500 flex items-center gap-1 font-mono truncate">
-              <UserCheck className="w-3 h-3 text-cyan-600 shrink-0" />
-              <span className="truncate">Opérateur : {user.name}</span>
+          <div>
+            <h1 className="font-display font-bold text-slate-900 text-sm">Poste de Contrôle & Scan</h1>
+            <p className="text-[10px] text-slate-500 flex items-center gap-1 font-mono">
+              <UserCheck className="w-3 h-3 text-cyan-600" />
+              Opérateur : {user.name}
             </p>
           </div>
         </div>
 
-        <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 font-semibold border border-cyan-200 shrink-0">
+        <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 font-semibold border border-cyan-200">
           Section 4 & 8
         </span>
       </div>

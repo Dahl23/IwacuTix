@@ -55,7 +55,10 @@ export const ProfilePage: React.FC = () => {
     followedEventIds, 
     currentPersona, 
     scanneurAssignments,
-    portefeuille 
+    portefeuille,
+    isUserVerified,
+    logoutUser,
+    openAuthModal
   } = useApp();
   const [showEventSelector, setShowEventSelector] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -141,9 +144,9 @@ export const ProfilePage: React.FC = () => {
     },
     {
       label: 'Moyens de paiement enregistrés',
-      description: 'Lumicash + Bitcoin Lightning (Blink)',
+      description: 'Lumicash & Ecocash + Bitcoin Lightning (Blink)',
       icon: CreditCard,
-      action: () => alert(`Votre compte Lumicash (${user.phone}) et portefeuille Lightning sont configurés.`)
+      action: () => alert(`Votre compte Mobile Money (${user.phone}) et portefeuille Lightning sont configurés.`)
     },
     {
       label: 'Sécurité & Authentification OTP',
@@ -161,7 +164,7 @@ export const ProfilePage: React.FC = () => {
 
   const handleLogout = () => {
     if (confirm('Voulez-vous vraiment vous déconnecter de IwacuTix ?')) {
-      alert('Déconnexion réussie. Redirection vers l\'accueil.');
+      logoutUser();
       navigate('/');
     }
   };
@@ -303,23 +306,37 @@ export const ProfilePage: React.FC = () => {
             </form>
           )}
           
-          {user.role === 'ORGANISATEUR' && (
+          {!isUserVerified && (
+            <div className="pt-2">
+              <p className="text-[10px] font-mono font-bold text-amber-800 uppercase tracking-wider bg-amber-50 px-2.5 py-1 rounded-full inline-flex items-center gap-1 border border-amber-200">
+                COMPTE INVITÉ • NON VÉRIFIÉ
+              </p>
+              <button
+                onClick={() => openAuthModal('GENERAL')}
+                className="mt-2.5 w-full py-2 px-4 rounded-xl bg-brand-primary hover:bg-orange-600 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <span>Créer mon compte Acheteur (Nom, Prénom & N°)</span>
+              </button>
+            </div>
+          )}
+
+          {isUserVerified && user.role === 'ORGANISATEUR' && (
             <p className="text-[10px] font-mono font-bold text-indigo-700 uppercase tracking-wider bg-indigo-50 px-2.5 py-1 rounded-full inline-flex items-center gap-1 border border-indigo-200">
               <ShieldCheck className="w-3 h-3 text-emerald-600" />
               KYC VÉRIFIÉ • {user.organisateurProfile?.nom_structure || "Vital'O FC"}
             </p>
           )}
 
-          {user.role === 'SUPERADMIN' && (
+          {isUserVerified && user.role === 'SUPERADMIN' && (
             <p className="text-[10px] font-mono font-bold text-purple-700 uppercase tracking-wider bg-purple-50 px-2.5 py-1 rounded-full inline-flex items-center gap-1 border border-purple-200">
               <Lock className="w-3 h-3 text-purple-600" />
               ADMINISTRATION PLATEFORME HQ
             </p>
           )}
 
-          {user.role === 'ACHETEUR' && currentPersona !== 'SCANNEUR' && (
+          {isUserVerified && user.role === 'ACHETEUR' && currentPersona !== 'SCANNEUR' && (
             <p className="text-[10px] font-mono font-bold text-emerald-700 uppercase tracking-wider bg-emerald-50 px-2.5 py-1 rounded-full inline-block border border-emerald-200">
-              ACHETEUR AUTHENTIFIÉ (OTP)
+              ACHETEUR AUTHENTIFIÉ (OTP) ✓
             </p>
           )}
 
@@ -334,18 +351,18 @@ export const ProfilePage: React.FC = () => {
         {/* Localized data cards */}
         <div className="w-full grid grid-cols-2 gap-3 pt-1">
           <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-0.5 text-left shadow-sm">
-            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Numéro Principal</span>
+            <span className="text-[8px] font-mono text-slate-400 uppercase tracking-wider block">Numéro Principal</span>
             <span className="text-xs font-bold font-mono text-slate-800 flex items-center gap-1.5">
               <Smartphone className="w-3.5 h-3.5 text-brand-primary" />
-              {user.phone.replace('+257 ', '')}
+              {user.phone ? user.phone.replace('+257 ', '') : 'Non configuré'}
             </span>
           </div>
 
           <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-0.5 text-left shadow-sm">
-            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Email</span>
+            <span className="text-[8px] font-mono text-slate-400 uppercase tracking-wider block">Email</span>
             <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5 truncate">
               <Mail className="w-3.5 h-3.5 text-brand-primary shrink-0" />
-              <span className="truncate">{user.email.split('@')[0]}</span>
+              <span className="truncate">{user.email ? user.email.split('@')[0] : 'Non configuré'}</span>
             </span>
           </div>
         </div>

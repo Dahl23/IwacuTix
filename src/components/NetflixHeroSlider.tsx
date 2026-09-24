@@ -139,7 +139,7 @@ export const NetflixHeroSlider: React.FC<NetflixHeroSliderProps> = ({
 
   return (
     <div
-      className="relative w-full -mx-4 sm:-mx-6 md:-mx-8 lg:-mx-12 overflow-hidden bg-slate-950 select-none group"
+      className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl bg-slate-950 border border-slate-800 select-none group"
       onMouseEnter={() => setIsPlaying(false)}
       onMouseLeave={() => setIsPlaying(true)}
       onTouchStart={handleTouchStart}
@@ -147,7 +147,7 @@ export const NetflixHeroSlider: React.FC<NetflixHeroSliderProps> = ({
       onTouchEnd={handleTouchEnd}
     >
       {/* Dynamic Background Image Layers with cross-fade */}
-      <div className="relative h-[clamp(420px,70vh,600px)] w-full overflow-hidden">
+      <div className="relative h-[420px] sm:h-[480px] md:h-[540px] lg:h-[620px] xl:h-[680px] w-full overflow-hidden">
         {heroEvents.map((evt, idx) => {
           const isActive = idx === currentIndex;
           return (
@@ -177,25 +177,24 @@ export const NetflixHeroSlider: React.FC<NetflixHeroSliderProps> = ({
         {/* Top subtle fade to blend with navbar */}
         <div className="absolute top-0 inset-x-0 h-24 bg-gradient-to-b from-black/60 to-transparent z-20" />
 
-        {/* Content Overlay (constrained & centered over full-bleed background) */}
-        <div className="absolute inset-0 z-30">
-          <div className="mx-auto flex h-full w-full max-w-[1400px] flex-col justify-between px-5 sm:px-6 md:px-8 lg:px-[clamp(24px,5vw,96px)] py-5 sm:py-8 md:py-10 lg:py-14 text-white">
+        {/* Content Overlay */}
+        <div className="absolute inset-0 z-30 flex flex-col justify-between p-5 sm:p-8 md:p-10 lg:p-14 text-white">
           
           {/* Top Bar inside Billboard: Category tag & Controls */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] sm:text-xs font-mono tracking-wider uppercase font-bold border shadow-lg truncate min-w-0 ${badge.color}`}>
-                <BadgeIcon className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate min-w-0">{badge.label}</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] sm:text-xs font-mono tracking-wider uppercase font-bold border shadow-lg ${badge.color}`}>
+                <BadgeIcon className="w-3.5 h-3.5" />
+                {badge.label}
               </span>
-              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-white/10 backdrop-blur-md text-white/90 border border-white/15 shrink-0">
+              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-white/10 backdrop-blur-md text-white/90 border border-white/15">
                 <ShieldCheck className="w-3 h-3 text-emerald-400" />
                 Billet 100% Officiel
               </span>
             </div>
 
             {/* Slide counter and Play/Pause */}
-            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 text-xs font-mono shrink-0">
+            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 text-xs font-mono">
               <span className="text-amber-400 font-bold">{currentIndex + 1}</span>
               <span className="text-white/40">/</span>
               <span className="text-white/70">{total}</span>
@@ -210,7 +209,7 @@ export const NetflixHeroSlider: React.FC<NetflixHeroSliderProps> = ({
           </div>
 
           {/* Bottom Billboard Content: Event Details & Action Buttons */}
-          <div className="w-full max-w-3xl lg:max-w-[66%] space-y-3 sm:space-y-4">
+          <div className="max-w-3xl lg:max-w-4xl space-y-3 sm:space-y-4">
             
             {/* Category / Organizer chip */}
             <div className="flex items-center gap-2 text-xs sm:text-sm text-amber-400 font-mono font-semibold">
@@ -306,8 +305,8 @@ export const NetflixHeroSlider: React.FC<NetflixHeroSliderProps> = ({
               );
             })}
           </div>
-            </div>
-          </div>
+
+        </div>
 
         {/* Floating Left / Right Navigation Chevrons */}
         <button

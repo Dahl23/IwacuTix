@@ -39,7 +39,7 @@ const PRESET_IMAGES = [
 
 export const CreateEventPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, addEvent, currentPersona, switchPersona } = useApp();
+  const { user, addEvent, currentPersona, switchPersona, isUserVerified, openAuthModal } = useApp();
 
   const isOrganizer = currentPersona === 'ORGANISATEUR' || currentPersona === 'SUPERADMIN' || user.role === 'organisateur' || user.role === 'superadmin';
 
@@ -172,7 +172,7 @@ export const CreateEventPage: React.FC = () => {
               Pourquoi passer au compte Organisateur ?
             </p>
             <ul className="text-[11px] text-slate-600 space-y-1.5 pl-4 list-disc marker:text-brand-primary">
-              <li>Vendez vos billets via Lumicash et Lightning / Blink</li>
+              <li>Vendez vos billets instantanément via Lumicash, EcoCash & Bancobu</li>
               <li>Encaissement direct et tableau de bord financier en temps réel</li>
               <li>Scannez et validez les QR codes de vos participants le jour J</li>
             </ul>
@@ -181,11 +181,15 @@ export const CreateEventPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <button
               onClick={() => {
-                switchPersona('ORGANISATEUR');
+                if (!isUserVerified) {
+                  openAuthModal('ORGANISATEUR');
+                } else {
+                  switchPersona('ORGANISATEUR');
+                }
               }}
               className="flex-1 py-3 px-5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs shadow-md shadow-orange-500/25 transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95"
             >
-              <span>Activer mon profil Organisateur</span>
+              <span>{isUserVerified ? 'Activer mon profil Organisateur' : 'Créer mon compte Acheteur d\'abord'}</span>
             </button>
             <button
               onClick={() => navigate('/home')}
@@ -358,7 +362,7 @@ export const CreateEventPage: React.FC = () => {
           </p>
 
           {/* Presets Horizontal Slider */}
-          <div className="flex gap-3 overflow-x-auto pb-2 snap-x scrollbar-none">
+          <div className="flex gap-3 overflow-x-auto pb-2 snap-x scrollbar-hide">
             {PRESET_IMAGES.map((img, idx) => (
               <button
                 type="button"
@@ -374,7 +378,7 @@ export const CreateEventPage: React.FC = () => {
                 }`}
               >
                 <img referrerPolicy="no-referrer" src={img.url} alt={img.name} className="w-full h-16 object-cover" />
-                <div className="p-1 bg-white/95 text-[10px] font-bold text-slate-700 truncate">{img.name}</div>
+                <div className="p-1 bg-white/95 text-[8px] font-bold text-slate-700 truncate">{img.name}</div>
               </button>
             ))}
           </div>

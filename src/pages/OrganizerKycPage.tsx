@@ -417,7 +417,7 @@ export const OrganizerKycPage: React.FC = () => {
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-slate-900">Publication d'Événements & Billets</h4>
-                  <p className="text-[11px] text-slate-500">Créez vos événements avec catégories de billets, prix en FBu et encaissement Lumicash ou Lightning / Blink.</p>
+                  <p className="text-[11px] text-slate-500">Créez vos événements avec catégories de billets, prix en FBu et encaissement Lumicash/EcoCash/Blink.</p>
                 </div>
               </div>
 

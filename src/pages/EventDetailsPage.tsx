@@ -195,7 +195,7 @@ export const EventDetailsPage: React.FC = () => {
               <p className="text-[10px] text-slate-500">Ajoutez cette date importante à votre agenda personnel</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 gap-2.5">
             <a
               href={getGoogleCalendarUrl(
                 event.title,
@@ -245,7 +245,7 @@ export const EventDetailsPage: React.FC = () => {
               <p className="text-[10px] text-slate-500">Diffusez l'événement sur les réseaux sociaux et WhatsApp</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-0.5">
+          <div className="grid grid-cols-4 gap-2 pt-0.5">
             <a
               href={`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText + ' ' + eventShareUrl)}`}
               target="_blank"
@@ -336,10 +336,10 @@ export const EventDetailsPage: React.FC = () => {
       </div>
 
       {/* Pinned Sticky Bottom Bar with CTA to select tickets */}
-      <div className="shrink-0 p-3 sm:p-3.5 bg-white/95 border-t border-slate-200/90 backdrop-blur-md flex items-center justify-between gap-3 flex-wrap shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-20">
-        <div className="flex flex-col min-w-0 flex-1">
+      <div className="shrink-0 p-3 sm:p-3.5 bg-white/95 border-t border-slate-200/90 backdrop-blur-md flex items-center justify-between gap-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-20">
+        <div className="flex flex-col">
           <span className="text-[9px] text-slate-500 uppercase font-mono tracking-wider font-semibold">Tarifs dès</span>
-          <span className="font-mono font-bold text-base sm:text-lg text-brand-primary truncate">
+          <span className="font-mono font-bold text-base sm:text-lg text-brand-primary">
             {formatPrice(minPrice)}
           </span>
         </div>
@@ -358,7 +358,7 @@ export const EventDetailsPage: React.FC = () => {
         <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end transition-all duration-300">
           <div className="absolute inset-0" onClick={() => setShowShareSheet(false)}></div>
           
-          <div className="relative bg-white rounded-t-[32px] max-h-[80%] max-w-lg w-full mx-auto flex flex-col overflow-hidden shadow-2xl z-10 border-t border-slate-200 animate-slide-up">
+          <div className="relative bg-white rounded-t-[32px] max-h-[80%] flex flex-col overflow-hidden shadow-2xl z-10 border-t border-slate-200 animate-slide-up">
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <Share2 className="w-5 h-5 text-brand-primary" />
@@ -453,7 +453,7 @@ export const EventDetailsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-5 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-white border-t border-slate-100 flex justify-center shrink-0">
+            <div className="px-5 py-4 bg-white border-t border-slate-100 flex justify-center shrink-0">
               <button
                 onClick={() => setShowShareSheet(false)}
                 className="w-full py-3 bg-slate-100 hover:bg-slate-200/80 rounded-xl font-bold text-xs text-slate-600 transition-colors cursor-pointer"

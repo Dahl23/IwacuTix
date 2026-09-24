@@ -31,7 +31,9 @@ export const OrganizerHubPage: React.FC = () => {
     tickets, 
     scanneurAssignments, 
     assignScanneur, 
-    removeScanneurAssignment 
+    removeScanneurAssignment,
+    isUserVerified,
+    openAuthModal
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'events' | 'scanners'>('events');
@@ -95,6 +97,28 @@ export const OrganizerHubPage: React.FC = () => {
   const formatPrice = (price: number) => {
     return `${price.toLocaleString('fr-FR')} FBu`;
   };
+
+  // 0. If user has not created and verified their buyer account first
+  if (!isUserVerified) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[#F8FAFC]">
+        <div className="w-16 h-16 rounded-3xl bg-orange-100 text-brand-primary flex items-center justify-center mb-4 shadow-md">
+          <Sparkles className="w-8 h-8" />
+        </div>
+        <h2 className="text-lg font-display font-extrabold text-slate-900">Compte Acheteur Préalable Obligatoire</h2>
+        <p className="text-xs text-slate-600 max-w-sm mt-2 leading-relaxed">
+          Avant de pouvoir activer votre profil d'organisateur et créer des événements sur IwacuTix, vous devez d'abord créer et faire vérifier votre compte acheteur avec votre nom, prénom et numéro de téléphone portable (+257...).
+        </p>
+        <button
+          onClick={() => openAuthModal('ORGANISATEUR')}
+          className="mt-6 px-6 py-3 rounded-xl bg-brand-primary hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-orange-500/25 cursor-pointer active:scale-95 transition-all flex items-center gap-2"
+        >
+          <span>Créer & Vérifier mon compte maintenant</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
 
   // If not verified organizer, prompt to verify CNI
   if (user.role !== 'ORGANISATEUR' && user.role !== 'SUPERADMIN') {
@@ -301,16 +325,16 @@ export const OrganizerHubPage: React.FC = () => {
                       </div>
 
                       {/* Event Stats summary */}
-                      <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 min-w-0 text-center text-xs">
-                        <div className="min-w-0">
+                      <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 shrink-0 text-center text-xs">
+                        <div>
                           <span className="text-[9px] text-slate-400 block font-mono">Vendus</span>
                           <span className="font-bold text-slate-800">{eventTickets.length}</span>
                         </div>
-                        <div className="min-w-0">
+                        <div>
                           <span className="text-[9px] text-slate-400 block font-mono">Recette</span>
-                          <span className="font-mono font-bold text-emerald-600 truncate block">{formatPrice(eventRevenue)}</span>
+                          <span className="font-mono font-bold text-emerald-600">{formatPrice(eventRevenue)}</span>
                         </div>
-                        <div className="min-w-0">
+                        <div>
                           <span className="text-[9px] text-slate-400 block font-mono">Scanneurs</span>
                           <span className="font-bold text-purple-700">{assignedScannersCount}</span>
                         </div>

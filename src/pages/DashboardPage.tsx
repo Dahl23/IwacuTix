@@ -220,10 +220,10 @@ export const DashboardPage: React.FC = () => {
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100/50 uppercase">
+                <span className="text-[8px] font-mono font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100/50 uppercase">
                   {event.category}
                 </span>
-                <span className="text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100 flex items-center gap-0.5">
+                <span className="text-[8px] font-mono font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100 flex items-center gap-0.5">
                   <ShieldCheck className="w-2.5 h-2.5" />
                   Structure Vérifiée KYC
                 </span>
@@ -246,13 +246,13 @@ export const DashboardPage: React.FC = () => {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3 pt-1">
+          <div className="grid grid-cols-2 gap-3 pt-1">
             {/* FBu Wallet */}
             <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-1">
               <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider block">
-                Solde Lumicash (FBu)
+                Solde Mobile Money (FBu)
               </span>
-              <div className="text-sm font-mono font-bold text-white truncate">
+              <div className="text-sm font-mono font-bold text-white">
                 {portefeuille.solde_disponible_fbu.toLocaleString('fr-FR')} FBu
               </div>
               <span className="text-[9px] text-emerald-400 flex items-center gap-1 font-mono">
@@ -266,7 +266,7 @@ export const DashboardPage: React.FC = () => {
               <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider block">
                 Solde Lightning (Sats ⚡)
               </span>
-              <div className="text-sm font-mono font-bold text-amber-400 truncate">
+              <div className="text-sm font-mono font-bold text-amber-400">
                 {portefeuille.solde_disponible_sats.toLocaleString('fr-FR')} SATS
               </div>
               <span className="text-[9px] text-amber-300 flex items-center gap-1 font-mono">
@@ -339,7 +339,7 @@ export const DashboardPage: React.FC = () => {
             <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">
               + Assigner un nouveau scanneur
             </span>
-            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <input
                 type="text"
                 placeholder="Nom du scanneur (ex: Porte C)"
@@ -422,7 +422,7 @@ export const DashboardPage: React.FC = () => {
                   style={{ width: `${Math.min(salesProgressPercent, 100)}%` }}
                 ></div>
               </div>
-              <p className="text-[10px] text-slate-400 pt-0.5">{salesProgressPercent}% de la capacité</p>
+              <p className="text-[8px] text-slate-400 pt-0.5">{salesProgressPercent}% de la capacité</p>
             </div>
           </div>
 

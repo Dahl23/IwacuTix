@@ -31,8 +31,7 @@ export const TicketSelectionPage: React.FC = () => {
 
   const handleIncrement = (categoryName: string) => {
     setQuantities((prev) => ({
-      // The backend order endpoint accepts one tier_id per command.
-      // Keep the purchase focused on one ticket category at a time.
+      ...prev,
       [categoryName]: (prev[categoryName] || 0) + 1,
     }));
   };
@@ -65,13 +64,7 @@ export const TicketSelectionPage: React.FC = () => {
     event.ticketCategories.forEach((cat) => {
       const qty = quantities[cat.name] || 0;
       if (qty > 0) {
-        addToCart(event.id, event.title, cat.name, qty, cat.price, {
-          tierId: cat.tierId || cat.id,
-          eventDate: event.date,
-          eventTime: event.time,
-          eventLocation: event.location,
-          moyens_paiement_acceptes: cat.moyens_paiement_acceptes,
-        });
+        addToCart(event.id, event.title, cat.name, qty, cat.price);
       }
     });
 
@@ -196,12 +189,12 @@ export const TicketSelectionPage: React.FC = () => {
       </div>
 
       {/* Pinned Sticky footer with computation summary */}
-      <div className="shrink-0 p-3 sm:p-3.5 bg-white/95 border-t border-slate-200/90 backdrop-blur-md flex items-center justify-between gap-3 flex-wrap shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-20">
-        <div className="flex flex-col min-w-0 flex-1">
+      <div className="shrink-0 p-3 sm:p-3.5 bg-white/95 border-t border-slate-200/90 backdrop-blur-md flex items-center justify-between gap-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] z-20">
+        <div className="flex flex-col">
           <span className="text-[9px] text-slate-500 uppercase font-mono font-semibold">
             Billet{totalQuantity > 1 ? 's' : ''} : {totalQuantity} {!isUserVerified && '• Compte requis'}
           </span>
-          <span className="font-mono font-bold text-base sm:text-lg text-brand-primary truncate">
+          <span className="font-mono font-bold text-base sm:text-lg text-brand-primary">
             {formatPrice(totalPrice)}
           </span>
         </div>

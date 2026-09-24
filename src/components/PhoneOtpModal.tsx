@@ -174,11 +174,11 @@ export const PhoneOtpModal: React.FC<PhoneOtpModalProps> = ({ isOpen, onClose, o
                   )}
                   {isEcocash && (
                     <span className="font-bold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full border border-sky-200">
-                      Econet
+                      EcoCash (Econet)
                     </span>
                   )}
                   {!isLumicash && !isEcocash && (
-                    <span className="text-slate-400 italic">Entrez un numéro 6x Lumitel ou 7x Econet</span>
+                    <span className="text-slate-400 italic">Entrez un numéro 6x (Lumicash) ou 7x (EcoCash)</span>
                   )}
                 </div>
               </div>
