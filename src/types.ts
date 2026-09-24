@@ -297,4 +297,113 @@ export interface PaginatedResponse<T> {
   results: T[];
 }
 
+export interface OrganisateurProfilApi {
+  id: string;
+  telephone: string;
+  email: string;
+  nom_entreprise: string;
+  canal_reception: 'LIGHTNING' | 'LUMICASH';
+  destination_reception: string;
+  numero_mobile_money_reception?: string;
+  adresse_lightning_reception?: string;
+  document_verification: string | null;
+  statut_verification: 'EN_ATTENTE' | 'VERIFIE' | 'REJETE';
+  commission_taux: string;
+}
+
+export interface OrganisateurStats {
+  nb_evenements: number;
+  nb_billets_vendus: number;
+  nb_ventes: number;
+  total_fbu_affiche: number;
+  total_sats: number;
+  total_net_organisateur_sats: number;
+  total_commission_sats: number;
+  par_evenement: { event__titre: string; nb_ventes: number; total_sats: number }[];
+  par_tier: { event__titre: string; tier__nom: string; nb_ventes: number; total_sats: number }[];
+  par_mois: { mois: string; nb_ventes: number; total_sats: number }[];
+}
+
+export interface DemandeOrganisateur {
+  id: string;
+  telephone: string;
+  nom_soumis: string;
+  nom_entreprise: string;
+  nom_structure?: string | null;
+  document_verification: string;
+  justification?: string | null;
+  statut: 'EN_ATTENTE_CONTROLE_AUTO' | 'REJETE_AUTO' | 'EN_ATTENTE_SUPERADMIN' | 'APPROUVE' | 'REJETE';
+  motif_rejet?: string | null;
+  date_soumission: string;
+}
+
+export interface ScanLogEntry {
+  id: string;
+  scanned_at: string;
+  statut_validation: 'ACCEPTE' | 'REJETE';
+  raison_rejet?: string;
+  billet_event_titre: string;
+  billet_tiers_lib: string;
+  billet_qr_code_hash: string;
+  billet_statut: 'VALIDE' | 'UTILISE' | 'ANNULE';
+  scanneur_nom?: string;
+  scanneur_telephone?: string;
+}
+
+export interface ScanLogResponse {
+  count: number;
+  results: ScanLogEntry[];
+  stats: {
+    total: number;
+    acceptes: number;
+    rejetes: number;
+  };
+}
+
+export interface LumicashDemanderOtpResponse {
+  order: ApiCommandeOrder;
+  next: string;
+  paiement: {
+    type: 'lumicash_onramp';
+    provider: 'bitlibera';
+    montant_fbu: string;
+    instruction: string;
+  };
+}
+
+export interface LumicashConfirmerResponse {
+  order: ApiCommandeOrder;
+  message: string;
+}
+
+export interface AdminStats {
+  nb_evenements: number;
+  nb_organisateurs_verifies: number;
+  nb_billets_vendus: number;
+  nb_ventes: number;
+  total_fbu_affiche: number;
+  total_sats: number;
+  total_commission_sats: number;
+  total_net_organisateur_sats: number;
+  par_moyen_paiement: { moyen_paiement: string; nb_ventes: number; total_sats: number }[];
+  reglements: {
+    commission_reussis: number;
+    organisateur_reussis: number;
+    organisateur_echecs_definitifs: number;
+  };
+}
+
+export interface TransactionAuditLog {
+  id: string;
+  order_id?: string;
+  type_evenement: string;
+  canal: 'BITLIBERA' | 'BLINK' | 'MANUEL';
+  montant_sats?: number;
+  montant_fbu?: string;
+  statut: string;
+  reference_externe?: string;
+  date_creation: string;
+  details?: Record<string, any>;
+}
+
 
