@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { Event } from '../types';
+import { Event, TicketCategory, OrganisateurStats, ScanneurAssignment } from '../types';
+import { api, API_BASE_URL } from '../services/apiClient';
+import { toAbsoluteApiUrl } from '../services/apiMappers';
 import { 
   TrendingUp, 
   Users, 
@@ -45,6 +47,70 @@ export const OrganizerHubPage: React.FC = () => {
   const [scannerSuccessMsg, setScannerSuccessMsg] = useState('');
   const [scannerErrorMsg, setScannerErrorMsg] = useState('');
 
+  // Data chargée depuis l'API organisateur (/api/organisateurs/...)
+  const [apiEvents, setApiEvents] = useState<Event[] | null>(null);
+  const [orgStats, setOrgStats] = useState<OrganisateurStats | null>(null);
+  const [monProfilId, setMonProfilId] = useState<string | null>(null);
+  const [apiScanners, setApiScanners] = useState<ScanneurAssignment[] | null>(null);
+
+  const mapApiOrganizerEvent = (e: Record<string, any>): Event => {
+    const tiers: TicketCategory[] = (e.tiers || []).map((tier: Record<string, any>) => ({
+      id: tier.id,
+      tierId: tier.id,
+      name: tier.nom,
+      price: Number.parseFloat(tier.prix_fbu || '0') || 0,
+      available: tier.stock_disponible != null ? tier.stock_disponible : tier.stock_total || 0,
+      stockTotal: tier.stock_total,
+      moyens_paiement_acceptes: tier.moyens_paiement_acceptes,
+    }));
+    const catMap: Record<string, Event['category']> = { SPORT: 'sport', CONCERT: 'musique', RELIGIEUX: 'religion' };
+    const rawDate = e.date_debut ? new Date(e.date_debut) : null;
+    const validDate = rawDate && !Number.isNaN(rawDate.getTime()) ? rawDate : null;
+    return {
+      id: e.id,
+      title: e.titre,
+      description: e.description || '',
+      category: catMap[e.categorie] || 'corporate',
+      imageUrl: toAbsoluteApiUrl(e.affiche || e.image, API_BASE_URL) || '/gotix-logo.jpg',
+      date: validDate
+        ? validDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+        : 'Date à confirmer',
+      time: validDate
+        ? validDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+        : '--:--',
+      location: [e.lieu, e.ville].filter(Boolean).join(', '),
+      organisateur: e.organisateur || user.organisateurProfile?.nom_structure || user.name,
+      organisateur_id: e.organisateur_id || user.id,
+      ticketCategories: tiers,
+      statut: e.statut || 'BROUILLON',
+      visible_publiquement: e.visible_publiquement != null ? e.visible_publiquement : e.statut === 'PUBLIE',
+    };
+  };
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const prof = await api.organisateurs.getMonProfil();
+        setMonProfilId(prof.id);
+        try {
+          const scans = await api.organisateurs.getScanneurs(prof.id);
+          if (scans && scans.results) setApiScanners(scans.results.filter((s) => s.actif !== false));
+        } catch {}
+      } catch {}
+      try {
+        const res = await api.events.getMyEvents();
+        if (res && res.results && res.results.length > 0) {
+          setApiEvents(res.results.map(mapApiOrganizerEvent));
+        }
+      } catch {}
+      try {
+        const stats = await api.organisateurs.getStats();
+        setOrgStats(stats);
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 1. Filter events STRICTLY ATTACHED to the organizer's name or ID
   const isAttachedToMe = (evt: Event) => {
     if (user.role === 'SUPERADMIN') return true;
@@ -55,21 +121,22 @@ export const OrganizerHubPage: React.FC = () => {
     return Boolean(matchId || matchName || matchStructure);
   };
 
-  const myEvents = events.filter(isAttachedToMe);
+  const myEvents = apiEvents !== null ? apiEvents : events.filter(isAttachedToMe);
 
   // 2. Filter tickets attached to my events only
   const myEventIds = new Set(myEvents.map(e => e.id));
   const myTickets = tickets.filter(t => myEventIds.has(t.eventId));
 
   // 3. Filter scanner assignments attached to my events only
-  const myScanners = scanneurAssignments.filter(a => myEventIds.has(a.event_id));
+  const myScanners = apiScanners !== null ? apiScanners : scanneurAssignments.filter(a => myEventIds.has(a.event_id));
+  const displayScanners = apiScanners !== null ? apiScanners : myScanners;
 
   // 4. Compute statistics attached strictly to the organizer's events
   const totalRevenueFbu = myTickets.reduce((acc, t) => acc + t.price, 0);
   const totalTicketsSold = myTickets.length;
   const totalScannedTickets = myTickets.filter(t => t.status === 'utilise').length;
 
-  const handleAddScanner = (e: React.FormEvent) => {
+  const handleAddScanner = async (e: React.FormEvent) => {
     e.preventDefault();
     setScannerErrorMsg('');
     setScannerSuccessMsg('');
@@ -87,11 +154,36 @@ export const OrganizerHubPage: React.FC = () => {
       return;
     }
 
-    assignScanneur(scannerNom.trim(), scannerPhone.trim(), targetEventId);
+    if (monProfilId) {
+      try {
+        await api.organisateurs.assignerScanneur(monProfilId, {
+          telephone_ou_user_id: scannerPhone.trim().replace(/^\+257\s*/, '+257').replace(/\s+/g, ''),
+          event_id: targetEventId,
+        });
+        const scans = await api.organisateurs.getScanneurs(monProfilId);
+        if (scans && scans.results) setApiScanners(scans.results);
+      } catch {
+        assignScanneur(scannerNom.trim(), scannerPhone.trim(), targetEventId);
+      }
+    } else {
+      assignScanneur(scannerNom.trim(), scannerPhone.trim(), targetEventId);
+    }
+
     setScannerNom('');
     setScannerPhone('');
     setScannerSuccessMsg(`Scanneur « ${scannerNom.trim()} » habilité avec succès pour cet événement !`);
     setTimeout(() => setScannerSuccessMsg(''), 4000);
+  };
+
+  const handleRemoveScanner = async (assignmentId: string) => {
+    if (monProfilId) {
+      try {
+        await api.organisateurs.retirerScanneur(monProfilId, assignmentId);
+        setApiScanners((prev) => (prev ? prev.filter((a) => a.id !== assignmentId) : prev));
+        return;
+      } catch {}
+    }
+    removeScanneurAssignment(assignmentId);
   };
 
   const formatPrice = (price: number) => {
@@ -190,7 +282,7 @@ export const OrganizerHubPage: React.FC = () => {
               <Calendar className="w-4 h-4 text-brand-primary" />
             </div>
             <div className="text-xl font-display font-extrabold text-slate-900">
-              {myEvents.length}
+              {orgStats ? orgStats.nb_evenements : myEvents.length}
             </div>
             <p className="text-[10px] text-slate-400">Rattachés à votre nom</p>
           </div>
@@ -202,7 +294,7 @@ export const OrganizerHubPage: React.FC = () => {
               <Users className="w-4 h-4 text-blue-600" />
             </div>
             <div className="text-xl font-display font-extrabold text-slate-900">
-              {totalTicketsSold}
+              {orgStats ? orgStats.nb_billets_vendus : totalTicketsSold}
             </div>
             <p className="text-[10px] text-slate-400">Total sur vos événements</p>
           </div>
@@ -214,9 +306,13 @@ export const OrganizerHubPage: React.FC = () => {
               <DollarSign className="w-4 h-4 text-emerald-600" />
             </div>
             <div className="text-base sm:text-lg font-mono font-extrabold text-emerald-600 truncate">
-              {formatPrice(totalRevenueFbu)}
+              {formatPrice(orgStats ? orgStats.total_fbu_affiche : totalRevenueFbu)}
             </div>
-            <p className="text-[10px] text-slate-400">Paiements encaissés</p>
+            <p className="text-[10px] text-slate-400">
+              {orgStats && orgStats.total_sats > 0
+                ? `${orgStats.total_sats.toLocaleString('fr-FR')} Sats ⚡`
+                : 'Paiements encaissés'}
+            </p>
           </div>
 
           {/* KPI 4 */}
@@ -226,7 +322,7 @@ export const OrganizerHubPage: React.FC = () => {
               <QrCode className="w-4 h-4 text-purple-600" />
             </div>
             <div className="text-xl font-display font-extrabold text-slate-900">
-              {myScanners.length}
+              {displayScanners.length}
             </div>
             <p className="text-[10px] text-slate-400">Contrôle des entrées</p>
           </div>
@@ -254,7 +350,7 @@ export const OrganizerHubPage: React.FC = () => {
             }`}
           >
             <QrCode className="w-4 h-4" />
-            <span>Gestion de mes Scanneurs ({myScanners.length})</span>
+            <span>Gestion de mes Scanneurs ({displayScanners.length})</span>
           </button>
         </div>
 
@@ -285,7 +381,7 @@ export const OrganizerHubPage: React.FC = () => {
                   const eventRevenue = eventTickets.reduce((acc, t) => acc + t.price, 0);
                   const totalAvailable = evt.ticketCategories.reduce((acc, cat) => acc + cat.available, 0);
                   const fillRate = totalAvailable > 0 ? Math.round((eventTickets.length / (eventTickets.length + totalAvailable)) * 100) : 0;
-                  const assignedScannersCount = scanneurAssignments.filter(a => a.event_id === evt.id).length;
+                  const assignedScannersCount = displayScanners.filter(a => a.event_id === evt.id).length;
 
                   return (
                     <div
@@ -472,17 +568,17 @@ export const OrganizerHubPage: React.FC = () => {
                   </p>
                 </div>
                 <span className="text-xs font-mono font-bold bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-1 rounded-lg">
-                  {myScanners.length} actif{myScanners.length > 1 ? 's' : ''}
+                  {displayScanners.length} actif{displayScanners.length > 1 ? 's' : ''}
                 </span>
               </div>
 
-              {myScanners.length === 0 ? (
+              {displayScanners.length === 0 ? (
                 <div className="p-6 rounded-xl bg-slate-50 border border-slate-100 text-center text-xs text-slate-500">
                   Aucun scanneur n'est encore assigné à vos événements. Utilisez le formulaire ci-dessus pour en ajouter un.
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden">
-                  {myScanners.map((scanner) => (
+                  {displayScanners.map((scanner) => (
                     <div
                       key={scanner.id}
                       className="p-3.5 bg-white hover:bg-slate-50 transition-colors flex items-center justify-between gap-3"
@@ -507,7 +603,7 @@ export const OrganizerHubPage: React.FC = () => {
                       </div>
 
                       <button
-                        onClick={() => removeScanneurAssignment(scanner.id)}
+                        onClick={() => void handleRemoveScanner(scanner.id)}
                         className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
                         title="Révoquer l'accès scanneur"
                       >

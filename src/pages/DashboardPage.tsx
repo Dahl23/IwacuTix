@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { TicketPurchased } from '../types';
+import { api } from '../services/apiClient';
 import { 
   ChevronLeft, 
   TrendingUp, 
@@ -56,6 +57,26 @@ export const DashboardPage: React.FC = () => {
   // Organizer announcement update state
   const [updateMessage, setUpdateMessage] = useState('');
   const [publishSuccess, setPublishSuccess] = useState(false);
+
+  // Stats réelles chargées depuis l'API (/api/organisateurs/...)
+  const [apiLogsStats, setApiLogsStats] = useState<{ total: number; acceptes: number; rejetes: number } | null>(null);
+  const [apiSales, setApiSales] = useState<{ nb_ventes: number; total_sats: number } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      if (!id) return;
+      try {
+        const logs = await api.events.getLogsScan(id);
+        setApiLogsStats(logs.stats);
+      } catch {}
+      try {
+        const stats = await api.organisateurs.getStats();
+        const perEvent = stats.par_evenement.find((e) => e.event__titre === event?.title);
+        if (perEvent) setApiSales({ nb_ventes: perEvent.nb_ventes, total_sats: perEvent.total_sats });
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   if (!event) {
     return (
@@ -124,17 +145,19 @@ export const DashboardPage: React.FC = () => {
   // Scanners assigned to this event
   const eventScanners = scanneurAssignments.filter((a) => a.event_id === event.id && a.actif);
 
-  // Compute stats
+  // Scanned / Attended tickets (local)
+  const totalScanned = eventTickets.filter((t) => t.status === 'utilise').length;
+
+  // Compute stats (valeurs API prioritaires, repli local sinon)
   const totalRevenue = eventTickets.reduce((sum, t) => sum + t.price, 0);
   const totalTicketsSold = eventTickets.length;
-  
+  const displaySold = apiSales ? apiSales.nb_ventes : totalTicketsSold;
+  const displayScanned = apiLogsStats ? apiLogsStats.acceptes : totalScanned;
+
   // Calculate potential capacities
   const totalCapacity = event.ticketCategories.reduce((sum, cat) => sum + cat.available, 0);
-  const salesProgressPercent = totalCapacity > 0 ? Math.round((totalTicketsSold / totalCapacity) * 100) : 0;
-
-  // Scanned / Attended tickets
-  const totalScanned = eventTickets.filter((t) => t.status === 'utilise').length;
-  const attendancePercent = totalTicketsSold > 0 ? Math.round((totalScanned / totalTicketsSold) * 100) : 0;
+  const salesProgressPercent = totalCapacity > 0 ? Math.round((displaySold / totalCapacity) * 100) : 0;
+  const attendancePercent = displaySold > 0 ? Math.round((displayScanned / displaySold) * 100) : 0;
 
   const formatPrice = (price: number) => {
     return `${price.toLocaleString('fr-FR')} FBu`;
@@ -399,7 +422,9 @@ export const DashboardPage: React.FC = () => {
               <h4 className="text-xs font-mono font-bold text-slate-800">{formatPrice(totalRevenue)}</h4>
               <p className="text-[8.5px] text-emerald-600 font-bold flex items-center gap-0.5">
                 <TrendingUp className="w-2.5 h-2.5" />
-                100% encaissé
+                {apiSales && apiSales.total_sats > 0
+                  ? `${apiSales.total_sats.toLocaleString('fr-FR')} Sats ⚡`
+                  : '100% encaissé'}
               </p>
             </div>
           </div>
@@ -414,7 +439,7 @@ export const DashboardPage: React.FC = () => {
             </div>
             <div className="space-y-0.5">
               <h4 className="text-xs font-mono font-bold text-slate-800">
-                {totalTicketsSold} <span className="text-[9px] text-slate-400 font-normal">/ {totalCapacity}</span>
+                {displaySold} <span className="text-[9px] text-slate-400 font-normal">/ {totalCapacity}</span>
               </h4>
               <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mt-1">
                 <div 
@@ -435,14 +460,14 @@ export const DashboardPage: React.FC = () => {
               </div>
               <div className="p-1.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center gap-1">
                 <QrCode className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-mono font-bold">{totalScanned} scannés</span>
+                <span className="text-[10px] font-mono font-bold">{displayScanned} scannés</span>
               </div>
             </div>
             
             <div className="space-y-1 pt-1">
               <div className="flex justify-between text-[10px] font-bold">
                 <span className="text-slate-600">Entrées Validées</span>
-                <span className="text-brand-primary">{attendancePercent}% ({totalScanned}/{totalTicketsSold || 0})</span>
+                <span className="text-brand-primary">{attendancePercent}% ({displayScanned}/{displaySold || 0})</span>
               </div>
               <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                 <div 

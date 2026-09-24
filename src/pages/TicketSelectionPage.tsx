@@ -64,7 +64,7 @@ export const TicketSelectionPage: React.FC = () => {
     event.ticketCategories.forEach((cat) => {
       const qty = quantities[cat.name] || 0;
       if (qty > 0) {
-        addToCart(event.id, event.title, cat.name, qty, cat.price);
+        addToCart(event.id, event.title, cat.name, qty, cat.price, cat.id);
       }
     });
 

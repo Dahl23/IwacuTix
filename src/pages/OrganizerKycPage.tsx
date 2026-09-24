@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
+import { api } from '../services/apiClient';
 import { 
   ShieldCheck, 
   UploadCloud, 
@@ -39,6 +40,7 @@ export const OrganizerKycPage: React.FC = () => {
   const [emailOtpCode, setEmailOtpCode] = useState('');
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Sample quick load for smooth demo
   const handleLoadDemoCni = () => {
@@ -88,17 +90,50 @@ export const OrganizerKycPage: React.FC = () => {
     }
   };
 
-  const handleFinalActivation = () => {
-    submitOrganizerKyc({
-      nomLegal: nomLegal.trim(),
-      numeroCni: numeroCni.trim(),
-      email: email.trim(),
-      cniRectoUrl,
-      cniVersoUrl,
-      structureName: structureName.trim() || nomLegal.trim()
-    });
+  const handleFinalActivation = async () => {
+    const submitLocal = () => {
+      submitOrganizerKyc({
+        nomLegal: nomLegal.trim(),
+        numeroCni: numeroCni.trim(),
+        email: email.trim(),
+        cniRectoUrl,
+        cniVersoUrl,
+        structureName: structureName.trim() || nomLegal.trim()
+      });
+      navigate('/organisateur');
+    };
 
-    navigate('/organisateur');
+    setIsSubmitting(true);
+    setErrorMsg('');
+
+    // Soumission réelle d'une demande d'adhésion organisateur (multipart) côté backend
+    try {
+      const rectoRes = await fetch(cniRectoUrl);
+      if (!rectoRes.ok) throw new Error('Image CNI illisible');
+      const rectoBlob = await rectoRes.blob();
+      const file = new File([rectoBlob], 'cni-recto.jpg', {
+        type: rectoBlob.type || 'image/jpeg',
+      });
+      const demande = await api.organisateurs.soumettreDemande({
+        nom_entreprise: structureName.trim() || nomLegal.trim(),
+        nom_structure: structureName.trim() || undefined,
+        justification: `Demande d'adhésion organisateur IwacuTix - ${nomLegal.trim()}`,
+        document_verification: file,
+      });
+
+      if (demande && (demande.statut === 'REJETE_AUTO' || demande.statut === 'REJETE')) {
+        setErrorMsg(demande.motif_rejet || 'Votre demande a été rejetée automatiquement. Vérifiez vos documents (CNI illisible).');
+        setStep(1);
+        return;
+      }
+
+      submitLocal();
+    } catch {
+      // Backend indisponible → activation locale démo conservée
+      submitLocal();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -445,10 +480,11 @@ export const OrganizerKycPage: React.FC = () => {
             {/* Final Action */}
             <button
               id="btn-activate-organizer-profile"
-              onClick={handleFinalActivation}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 active:scale-95 transition-all cursor-pointer"
+              onClick={() => void handleFinalActivation()}
+              disabled={isSubmitting}
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 active:scale-95 transition-all cursor-pointer"
             >
-              <span>Accéder à mon Espace Organisateur</span>
+              <span>{isSubmitting ? 'Soumission de votre demande...' : 'Accéder à mon Espace Organisateur'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

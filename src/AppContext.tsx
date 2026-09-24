@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { 
   CartItem, 
   TicketPurchased, 
@@ -9,8 +9,11 @@ import {
   PortefeuilleOrganisateur, 
   ParametrePlateforme, 
   Versement, 
-  ScanLog 
+  ScanLog,
+  ApiDestinataireBillet
 } from './types';
+import { api, API_BASE_URL, getStoredAccessToken } from './services/apiClient';
+import { apiEventToEvent, apiTicketToPurchased, apiUserToUser } from './services/apiMappers';
 import { 
   MOCK_BUYER_USER, 
   MOCK_ORGANIZER_USER, 
@@ -30,6 +33,14 @@ import {
 
 export type PersonaType = 'ACHETEUR' | 'ORGANISATEUR' | 'SCANNEUR' | 'SUPERADMIN';
 
+// Brouillon de commande à créer côté backend (une commande par tier sélectionné)
+export interface OrderDraft {
+  event_id: string;
+  tier_id: string;
+  quantite: number;
+  destinataires?: ApiDestinataireBillet[];
+}
+
 export interface ScanResult {
   success: boolean;
   message: string;
@@ -42,13 +53,16 @@ interface AppContextType {
   currentPersona: PersonaType;
   switchPersona: (persona: PersonaType) => void;
   cart: CartItem[];
+  orderDrafts: OrderDraft[];
+  setOrderDrafts: React.Dispatch<React.SetStateAction<OrderDraft[]>>;
+  refreshTicketsFromApi: () => Promise<void>;
   tickets: TicketPurchased[];
   events: Event[];
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   selectedCategory: string;
   setSelectedCategory: (cat: string) => void;
-  addToCart: (eventId: string, eventTitle: string, categoryName: string, quantity: number, price: number) => void;
+  addToCart: (eventId: string, eventTitle: string, categoryName: string, quantity: number, price: number, tierId?: string) => void;
   updateCartQuantity: (eventId: string, categoryName: string, quantity: number) => void;
   removeFromCart: (eventId: string, categoryName: string) => void;
   clearCart: () => void;
@@ -264,6 +278,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [orderDrafts, setOrderDrafts] = useState<OrderDraft[]>([]);
   const [tickets, setTickets] = useState<TicketPurchased[]>(() => {
     try {
       const saved = localStorage.getItem('iwacutix_user_tickets');
@@ -278,6 +293,63 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch {}
   }, [tickets]);
   const [events, setEvents] = useState<Event[]>(MOCK_EVENTS);
+  const eventsRef = useRef<Event[]>(MOCK_EVENTS);
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
+
+  // Rafraîchir les billets de l'acheteur depuis le backend (/api/tickets/mes-billets/)
+  const refreshTicketsFromApi = useCallback(async () => {
+    if (!getStoredAccessToken()) return;
+    try {
+      const res = await api.tickets.getMesBillets();
+      if (!res || !res.results) return;
+      const mapped = res.results.map((billet) => apiTicketToPurchased(billet, eventsRef.current));
+      setTickets(mapped);
+    } catch {
+      // Backend indisponible → on conserve l'état local
+    }
+  }, []);
+
+  // Chargement du marketplace public : /api/public/evenements/ + détail (tiers & medias)
+  const loadPublicEvents = useCallback(async () => {
+    try {
+      const page1 = await api.public.getEvenements();
+      if (!page1 || !page1.results || page1.results.length === 0) return;
+      const fetched: Event[] = [];
+      for (const evt of page1.results) {
+        let detailed = evt;
+        if (!evt.tiers || evt.tiers.length === 0) {
+          try {
+            detailed = await api.public.getEvenement(evt.id);
+          } catch {}
+        }
+        fetched.push(apiEventToEvent(detailed, API_BASE_URL));
+      }
+      if (fetched.length > 0) setEvents(fetched);
+    } catch {
+      // Backend indisponible → MOCK_EVENTS conservés
+    }
+  }, []);
+
+  // Restauration de session (JWT) + chargement du marketplace au démarrage
+  useEffect(() => {
+    loadPublicEvents();
+    if (!getStoredAccessToken()) return;
+    api.auth.me()
+      .then((me) => {
+        setUser((prev) => ({ ...prev, ...apiUserToUser(me, prev, API_BASE_URL) }));
+        activatePersonaFromRole(me.role);
+      })
+      .catch(() => {});
+  }, [loadPublicEvents]);
+
+  const activatePersonaFromRole = (role: string) => {
+    if (role === 'ORGANISATEUR') setCurrentPersona('ORGANISATEUR');
+    else if (role === 'SUPERADMIN') setCurrentPersona('SUPERADMIN');
+    else setCurrentPersona('ACHETEUR');
+  };
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tous');
 
@@ -343,7 +415,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const addToCart = (eventId: string, eventTitle: string, categoryName: string, quantity: number, price: number) => {
+  const addToCart = (eventId: string, eventTitle: string, categoryName: string, quantity: number, price: number, tierId?: string) => {
     setCart((prevCart) => {
       const existingIndex = prevCart.findIndex(
         (item) => item.eventId === eventId && item.categoryName === categoryName
@@ -352,10 +424,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (existingIndex > -1) {
         const newCart = [...prevCart];
         newCart[existingIndex].quantity += quantity;
+        if (tierId && !newCart[existingIndex].tierId) newCart[existingIndex].tierId = tierId;
         return newCart;
       }
 
-      return [...prevCart, { eventId, eventTitle, categoryName, quantity, price }];
+      return [...prevCart, { eventId, eventTitle, categoryName, quantity, price, tierId }];
     });
   };
 
@@ -769,6 +842,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         currentPersona,
         switchPersona,
         cart,
+        orderDrafts,
+        setOrderDrafts,
+        refreshTicketsFromApi,
         tickets,
         events,
         searchQuery,

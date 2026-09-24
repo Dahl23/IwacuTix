@@ -35,7 +35,8 @@ import {
 import { AuthModal } from '../components/AuthModal';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { ThemeToggle } from '../components/ThemeToggle';
-import { getStoredAccessToken, API_BASE_URL } from '../services/apiClient';
+import { api, getStoredAccessToken, API_BASE_URL } from '../services/apiClient';
+import { toAbsoluteApiUrl } from '../services/apiMappers';
 import { DEFAULT_ANONYMOUS_AVATAR } from '../data';
 
 const AVATAR_PRESETS = [
@@ -79,8 +80,22 @@ export const ProfilePage: React.FC = () => {
     }
   }, [user.name, isEditingName]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const extractPhotoUrl = (res: unknown): string => {
+    if (!res || typeof res !== 'object') return '';
+    const r = res as Record<string, unknown>;
+    const userObj = r.user && typeof r.user === 'object' ? (r.user as Record<string, unknown>) : null;
+    const candidate =
+      r.url_photo_profil ||
+      r.photo_profil ||
+      r.url ||
+      r.avatarUrl ||
+      (userObj && (userObj.url_photo_profil || userObj.avatarUrl));
+    return typeof candidate === 'string' ? toAbsoluteApiUrl(candidate, API_BASE_URL) : '';
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
@@ -88,16 +103,45 @@ export const ProfilePage: React.FC = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        updateUserProfile({ avatarUrl: reader.result });
-        setShowPhotoModal(false);
-        setFeedback({ type: 'success', text: 'Photo de profil mise à jour avec succès !' });
-        setTimeout(() => setFeedback(null), 3500);
-      }
+    const applyLocalPreview = (dataUrl?: string) => {
+      if (dataUrl) updateUserProfile({ avatarUrl: dataUrl });
     };
-    reader.readAsDataURL(file);
+
+    try {
+      const res = await api.auth.updatePhotoProfil(file);
+      const serverUrl = extractPhotoUrl(res);
+      if (serverUrl) {
+        updateUserProfile({ avatarUrl: serverUrl });
+      } else {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') applyLocalPreview(reader.result);
+        };
+        reader.readAsDataURL(file);
+      }
+      setShowPhotoModal(false);
+      setFeedback({ type: 'success', text: 'Photo de profil mise à jour avec succès !' });
+      setTimeout(() => setFeedback(null), 3500);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') applyLocalPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+      setShowPhotoModal(false);
+      setFeedback({ type: 'success', text: 'Photo enregistrée localement (backend hors-ligne).' });
+      setTimeout(() => setFeedback(null), 4000);
+    }
+  };
+
+  const handleResetPhoto = async () => {
+    updateUserProfile({ avatarUrl: DEFAULT_ANONYMOUS_AVATAR });
+    setShowPhotoModal(false);
+    setFeedback({ type: 'success', text: 'Photo réinitialisée avec la silhouette neutre.' });
+    setTimeout(() => setFeedback(null), 3000);
+    try {
+      await api.auth.deletePhotoProfil();
+    } catch {}
   };
 
   const handleApplyUrl = (e: React.FormEvent) => {
@@ -719,12 +763,7 @@ export const ProfilePage: React.FC = () => {
             <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => {
-                  updateUserProfile({ avatarUrl: DEFAULT_ANONYMOUS_AVATAR });
-                  setShowPhotoModal(false);
-                  setFeedback({ type: 'success', text: 'Photo réinitialisée avec la silhouette neutre.' });
-                  setTimeout(() => setFeedback(null), 3000);
-                }}
+                onClick={() => void handleResetPhoto()}
                 className="text-[10px] font-semibold text-slate-500 hover:text-slate-800 cursor-pointer"
               >
                 Réinitialiser (Silhouette neutre)

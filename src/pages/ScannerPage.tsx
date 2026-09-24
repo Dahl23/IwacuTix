@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
+import { api } from '../services/apiClient';
 import { 
   ChevronLeft, 
   QrCode, 
@@ -28,6 +29,17 @@ export const ScannerPage: React.FC = () => {
     scanLogs 
   } = useApp();
 
+  const [scanning, setScanning] = useState(false);
+  const [apiScanLogs, setApiScanLogs] = useState<{
+    id: string;
+    ticket_id: string;
+    statut_validation: 'ACCEPTE' | 'REJETE';
+    tier_name?: string;
+    raison_rejet?: string;
+    scanned_at: string;
+    scanned_by_nom: string;
+  }[]>([]);
+
   // Find events where user is assigned or default to Vital'O FC
   const userAssignments = scanneurAssignments.filter(
     (a) => a.actif && (a.user_id === user.id || a.user_telephone === user.phone || user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN')
@@ -48,13 +60,81 @@ export const ScannerPage: React.FC = () => {
     (a) => a.event_id === selectedEventId && a.actif && (a.user_id === user.id || a.user_telephone === user.phone)
   ) || user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN';
 
-  const handleScan = (codeToScan?: string) => {
-    const code = codeToScan || inputCode;
-    if (!code.trim()) return;
+  // Journal des scans depuis /api/organisateurs/events/{id}/logs-scan/ (Section 3.D)
+  useEffect(() => {
+    if (!selectedEventId) return;
+    let cancelled = false;
+    api.events.getLogsScan(selectedEventId)
+      .then((res) => {
+        if (cancelled || !res || !res.results) return;
+        setApiScanLogs(res.results.map((log) => ({
+          id: log.id,
+          ticket_id: log.billet_qr_code_hash,
+          statut_validation: log.statut_validation,
+          tier_name: log.billet_tiers_lib,
+          raison_rejet: log.raison_rejet,
+          scanned_at: new Date(log.scanned_at).toLocaleString('fr-FR'),
+          scanned_by_nom: log.scanneur_nom || 'Organisateur',
+        })));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedEventId]);
 
-    const result = scanTicketWithSecurity(code.trim(), selectedEventId);
-    setLastScanResult(result);
-    if (!codeToScan) setInputCode('');
+  const handleScan = async (codeToScan?: string) => {
+    const code = codeToScan || inputCode;
+    if (!code.trim() || scanning) return;
+
+    setScanning(true);
+    try {
+      // Validation côté backend : POST /api/tickets/valider/ { qr_code }
+      const res = await api.tickets.valider(code.trim());
+      if (res.statut === 'ACCEPTE') {
+        setLastScanResult({
+          success: true,
+          message: 'Entrée autorisée',
+          ticket: res.ticket
+            ? {
+                id: res.ticket.id,
+                categoryName: res.ticket.tiers_lib,
+                recipientName: res.ticket.destinataire_nom || 'Titulaire principal',
+              }
+            : undefined,
+        });
+      } else {
+        setLastScanResult({
+          success: false,
+          message: res.error || 'Billet rejeté',
+          reason:
+            res.code === 'ticket_deja_scanne'
+              ? 'Ce billet a déjà été validé à l\'entrée (tentative de double passage).'
+              : res.code === 'ticket_invalide'
+              ? 'Le code scanné ne correspond à aucun billet officiel IwacuTix.'
+              : res.code === 'acces_interdit'
+              ? 'Accès interdit : scanneur non habilité pour cet événement.'
+              : undefined,
+        });
+      }
+    } catch (err: any) {
+      if (err instanceof TypeError) {
+        // Backend injoignable → repli sur la validation locale (mode hors-ligne)
+        const local = scanTicketWithSecurity(code.trim(), selectedEventId);
+        setLastScanResult(local);
+      } else {
+        setLastScanResult({
+          success: false,
+          message: err?.error || 'Échec de la validation du billet',
+          reason: err?.code === 'ticket_deja_scanne'
+            ? 'Billet déjà scanné (fraude).'
+            : err?.code === 'ticket_invalide'
+            ? 'Billet invalide ou introuvable.'
+            : undefined,
+        });
+      }
+    } finally {
+      setScanning(false);
+      if (!codeToScan) setInputCode('');
+    }
   };
 
   // Test ticket helpers
@@ -183,9 +263,10 @@ export const ScannerPage: React.FC = () => {
             </div>
             <button
               onClick={() => handleScan()}
-              className="px-4 py-2 bg-brand-primary hover:bg-brand-primary/90 text-white rounded-xl text-xs font-bold uppercase transition-colors shrink-0"
+              disabled={scanning}
+              className="px-4 py-2 bg-brand-primary hover:bg-brand-primary/90 text-white rounded-xl text-xs font-bold uppercase transition-colors shrink-0 disabled:opacity-60"
             >
-              Valider
+              {scanning ? '…' : 'Valider'}
             </button>
           </div>
         </div>
@@ -319,7 +400,7 @@ export const ScannerPage: React.FC = () => {
           </div>
 
           <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
-            {scanLogs.map((log) => (
+            {[...apiScanLogs, ...scanLogs].map((log) => (
               <div key={log.id} className="p-2.5 text-xs flex items-start justify-between gap-2">
                 <div className="space-y-0.5 min-w-0">
                   <div className="flex items-center gap-1.5">

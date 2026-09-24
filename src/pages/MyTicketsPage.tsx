@@ -1,13 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { Ticket, Calendar, MapPin, ChevronRight, Inbox, Lock, Sparkles, ArrowRight } from 'lucide-react';
+import { Ticket, Calendar, MapPin, ChevronRight, Inbox, Lock, Sparkles, ArrowRight, RefreshCcw } from 'lucide-react';
 
 export const MyTicketsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { tickets, isUserVerified, openAuthModal } = useApp();
+  const { tickets, isUserVerified, openAuthModal, refreshTicketsFromApi } = useApp();
 
   const [activeTab, setActiveTab] = useState<'valide' | 'utilise'>('valide');
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Recharger les billets depuis /api/tickets/mes-billets/ dès qu'un compte est vérifié
+  useEffect(() => {
+    if (!isUserVerified) return;
+    let cancelled = false;
+    setRefreshing(true);
+    refreshTicketsFromApi().finally(() => {
+      if (!cancelled) setRefreshing(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isUserVerified, refreshTicketsFromApi]);
 
   const userTickets = isUserVerified ? tickets : [];
   const filteredTickets = userTickets.filter((t) => t.status === activeTab);
@@ -34,6 +48,9 @@ export const MyTicketsPage: React.FC = () => {
           <span className="text-[10px] font-mono bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-500/30 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
             SECURE ACCESS
           </span>
+          {refreshing && isUserVerified && (
+            <RefreshCcw className="w-3.5 h-3.5 text-orange-500 animate-spin" />
+          )}
         </div>
 
         {/* Clickable tabs for filter (only if connected) */}

@@ -1,227 +1,487 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useApp } from '../AppContext';
-import { Smartphone, Clock, ShieldAlert, CheckCircle, Zap, Terminal, AlertTriangle } from 'lucide-react';
-import { BlinkPaymentView } from '../components/BlinkPaymentView';
+import { useApp, OrderDraft } from '../AppContext';
 import { api } from '../services/apiClient';
+import { apiTicketToPurchased } from '../services/apiMappers';
+import {
+  Smartphone, Clock, ShieldAlert, CheckCircle, Zap, AlertTriangle, Copy, Check, RefreshCcw, ArrowRight
+} from 'lucide-react';
+
+interface CreatedInvoice {
+  orderId: string;
+  paymentRequest?: string;
+  satoshis?: number;
+  montantFbu: string;
+  statut: 'PENDING' | 'SUCCESS' | 'EXPIRE' | 'ECHEC' | 'ERROR';
+  errorMsg?: string;
+  expiresAt: string;
+}
+
+const formatFbu = (amount: string | number) => {
+  const n = typeof amount === 'string' ? parseFloat(amount) || 0 : amount;
+  return `${n.toLocaleString('fr-FR')} FBu`;
+};
 
 export const ConfirmationPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { checkout, cart } = useApp();
+  const { events, refreshTicketsFromApi, clearCart, user } = useApp();
 
-  // Retrieve state or fallback
-  const { paymentMethod, phone, giftDetails } = (location.state as { 
-    paymentMethod: string; 
-    phone: string; 
-    giftDetails?: { 
-      isGift: boolean; 
-      recipientName?: string; 
-      recipientPhone?: string; 
-      recipientHasNoPhone?: boolean; 
-    }; 
-  }) || {
-    paymentMethod: 'Lumicash',
-    phone: '+257 69 123 456',
-  };
+  const {
+    paymentMethod,
+    phone,
+    orders,
+    total,
+  } = (location.state as {
+    paymentMethod: string;
+    phone?: string;
+    orders?: OrderDraft[];
+    total?: number;
+  }) || {};
 
-  const isBlink = paymentMethod.toLowerCase().includes('blink');
-  const [timeLeft, setTimeLeft] = useState(6); // 6 seconds auto-wait for quick demo
-  const [reservationSecondsLeft, setReservationSecondsLeft] = useState(600); // 10 minutes (order.expires_at)
-  const [reference] = useState(() => `${paymentMethod.toUpperCase().substring(0, 8)}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`);
-  const [isSimulatingWebhook, setIsSimulatingWebhook] = useState(false);
-  const [webhookFeedback, setWebhookFeedback] = useState<string | null>(null);
+  const drafts: OrderDraft[] = orders && orders.length > 0 ? orders : [];
 
-  // Compute total for display
-  const subtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  const serviceFee = cart.length > 0 ? 1000 : 0;
-  const total = subtotal + serviceFee;
+  const isLightning = paymentMethod === 'LIGHTNING';
 
-  const formatPrice = (price: number) => {
-    return `${price.toLocaleString('fr-FR')} FBu`;
-  };
+  const [invoices, setInvoices] = useState<CreatedInvoice[]>([]);
+  const [phase, setPhase] = useState<'CREATING' | 'WAIT' | 'CONFIRM_OTP' | 'EXPIRED' | 'ERROR'>('CREATING');
+  const [message, setMessage] = useState<string | null>(null);
+  const [otp, setOtp] = useState('');
+  const [submittingOtp, setSubmittingOtp] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [countdown, setCountdown] = useState(600); // 10 min (expires_at)
+  const activeIndexRef = useRef(0);
+  const finalizedRef = useRef(false);
 
-  const handleComplete = () => {
-    const newTickets = checkout(paymentMethod, phone, giftDetails);
-    navigate('/paiement/succes', {
-      state: {
-        newTickets,
-        total,
-        paymentMethod,
-        reference,
-      },
-    });
-  };
-
-  // 10-minute reservation countdown (Section 5.1: 10 minutes de réservation expires_at)
+  // ---- Redirection si accès direct sans brouillon ----
   useEffect(() => {
-    const timer = setInterval(() => {
-      setReservationSecondsLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          alert('Votre réservation de stock de 10 minutes a expiré. Veuillez relancer la commande.');
-          navigate('/panier');
-          return 0;
-        }
-        return prev - 1;
+    if (drafts.length === 0) {
+      navigate('/paiement', { replace: true });
+    }
+  }, []);
+
+  // ---- FINALISATION : rafraîchit les billets puis bascule sur la page succès ----
+  const finalize = async () => {
+    if (finalizedRef.current) return;
+    finalizedRef.current = true;
+
+    try {
+      await refreshTicketsFromApi();
+      let newTickets: ReturnType<typeof apiTicketToPurchased>[] = [];
+      try {
+        const res = await api.tickets.getMesBillets();
+        newTickets = (res.results || []).map((b) => apiTicketToPurchased(b, events));
+      } catch {}
+
+      clearCart();
+      navigate('/paiement/succes', {
+        replace: true,
+        state: {
+          newTickets,
+          total: total ?? 0,
+          paymentMethod,
+          isLightning,
+        },
       });
+    } catch {
+      clearCart();
+      navigate('/paiement/succes', {
+        replace: true,
+        state: { newTickets: [], total: total ?? 0, paymentMethod, isLightning },
+      });
+    }
+  };
+
+  // ---- LIGHTNING : créer la facture (une par tier) ----
+  const createLightningInvoices = async () => {
+    setPhase('CREATING');
+    setMessage('Création des factures Lightning sur le backend…');
+    try {
+      const results = await Promise.all(
+        drafts.map((d) =>
+          api.tickets.creerCommandeLightning({ ...d, moyen_paiement: 'LIGHTNING' as const })
+        )
+      );
+      const created: CreatedInvoice[] = results.map((r) => ({
+        orderId: r.order.id,
+        paymentRequest: r.paiement.paymentRequest,
+        satoshis: r.paiement.satoshis ?? undefined,
+        montantFbu: r.order.montant_fbu,
+        statut: 'PENDING',
+        expiresAt: r.order.expires_at,
+      }));
+      setInvoices(created);
+      setMessage(null);
+      setPhase('WAIT');
+    } catch (err: any) {
+      setMessage(
+        err?.code === 'moyen_paiement_non_accepte'
+          ? 'Ce tier n’accepte pas le paiement Lightning.'
+          : err?.code === 'stock_insuffisant'
+          ? 'Stock insuffisant (409).'
+          : err?.error || 'Impossible de créer la facture Lightning.'
+      );
+      setPhase('ERROR');
+    }
+  };
+
+  // ---- LUMICASH : étape 1 (demander OTP) ----
+  const requestLumicashOtp = async (index: number) => {
+    setPhase('CREATING');
+    setMessage('Réservation du stock et envoi de l’OTP SMS…');
+    try {
+      const draft = drafts[index];
+      const res = await api.tickets.demanderOtpLumicash(draft);
+      activeIndexRef.current = index;
+      setInvoices((prev) => {
+        const next = [...prev];
+        next[index] = {
+          orderId: res.order.id,
+          montantFbu: res.order.montant_fbu,
+          statut: 'PENDING',
+          expiresAt: res.order.expires_at,
+        };
+        return next;
+      });
+      setMessage(res.paiement?.instruction || 'Saisissez l’OTP reçu par SMS.');
+      setPhase('CONFIRM_OTP');
+    } catch (err: any) {
+      const code = err?.code;
+      setMessage(
+        code === 'stock_insuffisant'
+          ? 'Stock insuffisant (409).'
+          : code === 'moyen_paiement_non_accepte'
+          ? 'Ce tier n’accepte pas Lumicash.'
+          : err?.error || 'Impossible de démarrer le paiement Lumicash.'
+      );
+      setPhase('ERROR');
+    }
+  };
+
+  // ---- LUMICASH : étape 2 (confirmer OTP) ----
+  const confirmLumicashOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const idx = activeIndexRef.current;
+    const inv = invoices[idx];
+    if (!inv || !otp.trim()) return;
+    setSubmittingOtp(true);
+    setMessage(null);
+    try {
+      const res = await api.tickets.confirmerLumicash({ order_id: inv.orderId, otp: otp.trim() });
+      if (res.order.statut === 'SUCCESS') {
+        if (idx + 1 < drafts.length) {
+          setOtp('');
+          await requestLumicashOtp(idx + 1);
+        } else {
+          await finalize();
+        }
+      } else {
+        setMessage('Commande non confirmée. Réessayez.');
+      }
+    } catch (err: any) {
+      const code = err?.code;
+      if (code === 'paiement_echoue') {
+        setMessage('OTP incorrect ou paiement échoué (402). Demandez un nouvel OTP.');
+      } else if (code === 'reservation_expiree') {
+        setMessage('Réservation expirée (410). Relancez la commande depuis le panier.');
+        setTimeout(() => navigate('/panier'), 2500);
+      } else if (code === 'paiement_deja_confirme') {
+        if (idx + 1 < drafts.length) await requestLumicashOtp(idx + 1);
+        else await finalize();
+      } else {
+        setMessage(err?.error || 'Erreur lors de la confirmation.');
+      }
+    } finally {
+      setSubmittingOtp(false);
+    }
+  };
+
+  // ---- Initialisation au montage ----
+  useEffect(() => {
+    if (drafts.length === 0) return;
+    if (isLightning) {
+      createLightningInvoices();
+    } else {
+      requestLumicashOtp(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---- POLLING Lightning : vérifier l'état des commandes toutes les 3s (doc §6) ----
+  useEffect(() => {
+    if (!isLightning || phase !== 'WAIT' || finalizedRef.current) return;
+    const timer = setInterval(async () => {
+      try {
+        const pending = invoices.filter((i) => i && i.statut === 'PENDING');
+        if (pending.length === 0) return;
+        for (const inv of pending) {
+          try {
+            const cmd = await api.tickets.getCommande(inv.orderId);
+            setInvoices((prev) =>
+              prev.map((x) =>
+                x && x.orderId === inv.orderId
+                  ? { ...x, statut: cmd.statut as CreatedInvoice['statut'] }
+                  : x
+              )
+            );
+            if (cmd.statut === 'EXPIRE') {
+              setMessage('Réservation de stock expirée (10 min). Veuillez relancer la commande.');
+              setPhase('EXPIRED');
+              return;
+            }
+          } catch {}
+        }
+      } catch {}
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [isLightning, phase, invoices]);
+
+  // ---- Détecter quand toutes les factures Lightning sont SUCCESS ----
+  useEffect(() => {
+    if (!isLightning || phase !== 'WAIT' || invoices.length === 0) return;
+    const allDone = invoices.every((i) => i && i.statut === 'SUCCESS');
+    if (allDone) finalize();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoices, phase, isLightning]);
+
+  // ---- COUNTDOWN à partir de expires_at (min des factures en attente) ----
+  useEffect(() => {
+    const pendingExpiries = invoices.filter((i) => i && i.statut === 'PENDING').map((i) => new Date(i.expiresAt).getTime());
+    const minExpiry = pendingExpiries.length > 0 ? Math.min(...pendingExpiries) : null;
+    if (!minExpiry) return;
+    const timer = setInterval(() => {
+      const left = Math.max(0, Math.floor((minExpiry - Date.now()) / 1000));
+      setCountdown(left);
+      if (left <= 0 && phase !== 'EXPIRED') {
+        setMessage('Réservation expirée. Veuillez relancer la commande.');
+        setPhase('EXPIRED');
+      }
     }, 1000);
     return () => clearInterval(timer);
-  }, [navigate]);
+  }, [invoices, phase]);
 
-  useEffect(() => {
-    if (isBlink) return; // Blink manages its own polling and countdown
-
-    if (timeLeft > 0) {
-      const timer = setTimeout(() => {
-        setTimeLeft(timeLeft - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    } else {
-      handleComplete();
-    }
-  }, [timeLeft, isBlink]);
-
-  // Déclencher le webhook de test dev avec signature HMAC (Section 6.2)
-  const handleSimulateWebhook = async () => {
-    setIsSimulatingWebhook(true);
-    setWebhookFeedback(null);
+  const copyBolt11 = async (pr: string) => {
     try {
-      const provider = paymentMethod.toLowerCase().includes('eco') 
-        ? 'ecocash' 
-        : paymentMethod.toLowerCase().includes('bcb') 
-        ? 'bancobu' 
-        : 'lumicash';
-
-      await api.paiements.simulerWebhookMobileMoney(provider as any, reference, 'SUCCESS');
-      setWebhookFeedback(`Webhook ${provider.toUpperCase()} validé par signature HMAC-SHA256 (200 OK)`);
-      setTimeout(() => {
-        handleComplete();
-      }, 800);
-    } catch {
-      handleComplete();
-    } finally {
-      setIsSimulatingWebhook(false);
-    }
+      await navigator.clipboard.writeText(pr);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
   };
 
-  if (isBlink) {
-    return (
-      <BlinkPaymentView
-        totalFbu={total}
-        eventName={cart[0]?.eventTitle || 'Billetterie IwacuTix'}
-        onPaymentSuccess={({ satoshis, txHash, paymentRequest }) => {
-          const newTickets = checkout(
-            `Blink Lightning ⚡ (${satoshis.toLocaleString('fr-FR')} sats)`,
-            phone || 'Wallet Lightning Blink',
-            giftDetails
-          );
-          navigate('/paiement/succes', {
-            state: {
-              newTickets,
-              total,
-              paymentMethod: `Blink Lightning ⚡ (${satoshis.toLocaleString('fr-FR')} sats)`,
-              txHash,
-              paymentRequest,
-              isLightning: true,
-            },
-          });
-        }}
-        onCancel={() => navigate(-1)}
-      />
-    );
-  }
+  const handleExpired = () => {
+    navigate('/panier');
+  };
 
-  const reservationMinutes = Math.floor(reservationSecondsLeft / 60);
-  const reservationSeconds = reservationSecondsLeft % 60;
+  if (drafts.length === 0) return null;
+
+  const reservationMinutes = Math.floor(countdown / 60);
+  const reservationSeconds = countdown % 60;
+  const displayTotal = total ?? invoices.reduce((acc, i) => acc + (i ? parseFloat(i.montantFbu) || 0 : 0), 0);
 
   return (
     <div className="flex-1 flex flex-col justify-between p-4 sm:p-5 bg-[#F8FAFC] h-full min-h-0 overflow-y-auto text-center">
-      
+
       {/* 10-Minute Reservation Stock Banner */}
       <div className="p-2.5 bg-amber-50 border border-amber-200/80 rounded-2xl flex items-center justify-between text-left text-amber-900 shadow-xs shrink-0">
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-amber-600 shrink-0" />
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Réservation de stock active</p>
-            <p className="text-[9px] text-amber-700">Expire dans {reservationMinutes}m {reservationSeconds < 10 ? `0${reservationSeconds}` : reservationSeconds}s</p>
+            <p className="text-[9px] text-amber-700">
+              Expire dans {reservationMinutes}m {reservationSeconds < 10 ? `0${reservationSeconds}` : reservationSeconds}s
+            </p>
           </div>
         </div>
         <span className="text-[10px] font-mono font-bold bg-amber-200/60 px-2 py-0.5 rounded-full text-amber-900">
-          Section 5.1
+          expires_at
         </span>
       </div>
 
-      {/* Main waiting presentation */}
+      {/* Main content */}
       <div className="space-y-5 my-auto animate-fade-in flex flex-col items-center py-2">
-        
-        {/* Animated radar/spinner mockup */}
-        <div className="relative w-16 h-16 flex items-center justify-center">
-          <div className="absolute inset-0 border-[3px] border-brand-primary/20 rounded-full"></div>
-          <div className="absolute inset-0 border-[3px] border-t-brand-primary border-l-transparent border-r-transparent border-b-transparent rounded-full animate-spin"></div>
-          <Smartphone className="w-7 h-7 text-brand-primary animate-bounce" />
-        </div>
+        {phase === 'CREATING' ? (
+          <>
+            <div className="relative w-16 h-16 flex items-center justify-center">
+              <div className="absolute inset-0 border-[3px] border-brand-primary/20 rounded-full"></div>
+              <div className="absolute inset-0 border-[3px] border-t-brand-primary border-l-transparent border-r-transparent border-b-transparent rounded-full animate-spin"></div>
+              <Smartphone className="w-7 h-7 text-brand-primary animate-bounce" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-display font-bold text-slate-900 tracking-tight">
+                {isLightning ? 'Création de la facture Lightning…' : 'Préparation du paiement Lumicash…'}
+              </h3>
+              <p className="text-xs text-brand-primary font-mono tracking-wider font-bold uppercase">
+                POST /api/tickets/commandes/
+              </p>
+            </div>
+            {message && (
+              <p className="text-xs text-slate-500 max-w-[280px]">{message}</p>
+            )}
+          </>
+        ) : phase === 'ERROR' || phase === 'EXPIRED' ? (
+          <>
+            <div className="w-16 h-16 rounded-full bg-red-50 border border-red-200 flex items-center justify-center">
+              <AlertTriangle className="w-8 h-8 text-red-500" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-display font-bold text-slate-900 tracking-tight">
+                {phase === 'EXPIRED' ? 'Réservation expirée' : 'Paiement impossible'}
+              </h3>
+              <p className="text-xs text-slate-500 max-w-[300px]">{message}</p>
+            </div>
+            <button
+              onClick={handleExpired}
+              className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+            >
+              Retour au panier
+            </button>
+          </>
+        ) : (
+          <>
+            {/* LIGHTNING : afficher la facture + QR Code */}
+            {isLightning && (
+              <div className="w-full space-y-3">
+                <div className="flex items-center justify-center gap-2 text-orange-600">
+                  <Zap className="w-5 h-5 fill-current" />
+                  <span className="text-xs font-display font-bold uppercase tracking-wider">
+                    Payez en Bitcoin Lightning
+                  </span>
+                </div>
 
-        <div className="space-y-1">
-          <h3 className="text-base font-display font-bold text-slate-900 tracking-tight">
-            En attente de confirmation USSD...
-          </h3>
-          <p className="text-xs text-brand-primary font-mono tracking-wider font-bold uppercase">
-            Paiement via {paymentMethod}
-          </p>
-        </div>
+                {invoices.map((inv, idx) =>
+                  inv && inv.paymentRequest ? (
+                    <div
+                      key={inv.orderId}
+                      className="w-full p-4 rounded-2xl bg-white border border-orange-200 space-y-3 shadow-xs"
+                    >
+                      <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 border-b border-slate-100 pb-2">
+                        <span>FACTURE {idx + 1}/{invoices.length}</span>
+                        <span className="font-bold text-slate-800">{formatFbu(inv.montantFbu)}</span>
+                      </div>
 
-        {/* Visual simulated phone prompt pop-up */}
-        <div className="w-full p-4 rounded-2xl bg-white border border-slate-200 text-center space-y-2.5 shadow-xs">
-          <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 border-b border-slate-100 pb-2">
-            <span>RÉFÉRENCE COMMANDE</span>
-            <span className="font-bold text-slate-800">{reference}</span>
-          </div>
-          <p className="text-xs text-slate-600 font-medium leading-relaxed">
-            Une demande de confirmation de <span className="font-bold text-slate-900">{formatPrice(total)}</span> a été transmise :
-          </p>
-          <p className="text-sm font-mono font-bold text-brand-primary bg-slate-50 py-1.5 px-3 rounded-xl border border-slate-200/80 tracking-wide">
-            {phone}
-          </p>
-          <div className="p-2 bg-indigo-50/60 border border-indigo-100 rounded-xl text-[10px] text-indigo-800 font-medium flex items-center justify-center gap-1.5">
-            <Zap className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-            <span>Confirmez le paiement sur votre téléphone via USSD</span>
-          </div>
-        </div>
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`lightning:${inv.paymentRequest}`)}`}
+                        alt="QR Code Lightning BOLT11"
+                        className="w-44 h-44 mx-auto rounded-xl border border-slate-200 bg-white"
+                      />
 
-        {webhookFeedback && (
-          <div className="w-full p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[10px] font-mono text-emerald-800">
-            {webhookFeedback}
-          </div>
+                      <button
+                        onClick={() => copyBolt11(inv.paymentRequest!)}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all cursor-pointer"
+                      >
+                        <span className="font-mono text-[10px] text-slate-600 truncate flex-1 text-left">
+                          {inv.paymentRequest.slice(0, 40)}…
+                        </span>
+                        {copied ? (
+                          <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-slate-500 shrink-0" />
+                        )}
+                      </button>
+
+                      <p className="text-[11px] text-slate-600 leading-normal">
+                        Scannez le QR avec <strong>Blink</strong>, <strong>Phoenix</strong> ou tout wallet Lightning.
+                        Montant : <span className="font-mono font-bold text-orange-600">{inv.satoshis?.toLocaleString('fr-FR')} sats</span>
+                      </p>
+
+                      <div className="p-2 bg-emerald-50/70 border border-emerald-200 rounded-xl text-[10px] text-emerald-800 font-medium flex items-center justify-center gap-1.5">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        Statut : {inv.statut === 'SUCCESS' ? 'PAYÉ ✅' : inv.statut}
+                      </div>
+                    </div>
+                  ) : null
+                )}
+              </div>
+            )}
+
+            {/* LUMICASH : saisie OTP */}
+            {!isLightning && phase === 'CONFIRM_OTP' && (
+              <form onSubmit={confirmLumicashOtp} className="w-full p-4 rounded-2xl bg-white border border-slate-200 space-y-3 shadow-xs text-left">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-brand-primary" />
+                  <span className="text-xs font-display font-bold text-slate-800 uppercase tracking-wider">
+                    Confirmation Lumicash
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">{message}</p>
+
+                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                  <p className="text-[9px] text-slate-500 font-mono uppercase">Montant à confirmer</p>
+                  <p className="font-mono font-bold text-brand-primary text-sm">
+                    {formatFbu(invoices[activeIndexRef.current]?.montantFbu || '0')}
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                    Téléphone : {phone || user.phone}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider block">
+                    Code OTP SMS (6 chiffres)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                    placeholder="123456"
+                    autoFocus
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-lg font-mono tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submittingOtp || otp.length < 4}
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                >
+                  {submittingOtp ? 'Validation…' : 'Confirmer le paiement'}
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </form>
+            )}
+
+            {/* Récap commande en attente (Lumicash) */}
+            {!isLightning && phase !== 'CONFIRM_OTP' && (
+              <div className="w-full p-4 rounded-2xl bg-white border border-slate-200 text-center space-y-2.5 shadow-xs">
+                <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 border-b border-slate-100 pb-2">
+                  <span>RÉFÉRENCE COMMANDE</span>
+                  <span className="font-bold text-slate-800">{invoices[0]?.orderId || '—'}</span>
+                </div>
+                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                  Réservation de{' '}
+                  <span className="font-bold text-slate-900">{formatFbu(displayTotal)}</span>
+                  {' '}en cours sur le backend…
+                </p>
+              </div>
+            )}
+          </>
         )}
 
-        {/* Polling / Dev Action buttons */}
-        <div className="w-full space-y-2">
-          <button
-            onClick={handleSimulateWebhook}
-            disabled={isSimulatingWebhook}
-            className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-mono font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
-          >
-            <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-            {isSimulatingWebhook ? 'Envoi Webhook...' : 'Simuler Webhook Provider (HMAC-SHA256)'}
-          </button>
-
-          <button
-            onClick={handleComplete}
-            className="text-xs text-brand-primary font-bold hover:underline cursor-pointer"
-          >
-            Valider immédiatement sans attendre ({timeLeft}s) →
-          </button>
-        </div>
-
+        {message && (phase === 'WAIT' || phase === 'CONFIRM_OTP') && (
+          <div className="w-full p-2.5 bg-indigo-50/60 border border-indigo-100 rounded-xl text-[10px] text-indigo-800 font-medium">
+            {message}
+          </div>
+        )}
       </div>
 
-      {/* Security notice footer */}
+      {/* Polling notice footer (doc §6 — aucun appel webhook côté frontend) */}
       <div className="mt-2 flex items-center justify-center gap-1.5 text-[10px] text-slate-400 shrink-0">
-        <ShieldAlert className="w-3.5 h-3.5 text-slate-400" />
-        <span>Polling automatique de /api/tickets/commandes/ toutes les 3s</span>
+        <RefreshCcw className="w-3.5 h-3.5 text-slate-400" />
+        <span>
+          {isLightning
+            ? 'Polling GET /api/tickets/commandes/{id} toutes les 3s (pas de webhook)'
+            : 'POST /api/tickets/commandes/lumicash/confirmer/ (OTP)'}
+        </span>
       </div>
+
+      {phase === 'WAIT' && (
+        <div className="mt-2 flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
+          <ShieldAlert className="w-3.5 h-3.5" />
+          <span>Total : {formatFbu(displayTotal)} — {invoices.length} facture(s)</span>
+        </div>
+      )}
     </div>
   );
 };
-

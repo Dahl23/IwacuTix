@@ -94,6 +94,9 @@ export interface ScanLog {
 }
 
 export interface TicketCategory {
+  id?: string;
+  tierId?: string;
+  stockTotal?: number;
   name: string; // e.g. "Pelouse", "Tribune d'Honneur", "VIP", "VVIP"
   price: number; // in FBu
   description?: string;
@@ -124,6 +127,7 @@ export interface CartItem {
   categoryName: string;
   quantity: number;
   price: number;
+  tierId?: string;
 }
 
 export interface TicketPurchased {

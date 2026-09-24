@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { Event, TicketCategory } from '../types';
+import { api } from '../services/apiClient';
 import { ChevronLeft, Calendar as CalendarIcon, MapPin, Sparkles, Plus, Trash2, Tag, Layers, CheckCircle, ShieldAlert } from 'lucide-react';
 
 const PRESET_IMAGES = [
@@ -41,7 +42,7 @@ export const CreateEventPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, addEvent, currentPersona, switchPersona, isUserVerified, openAuthModal } = useApp();
 
-  const isOrganizer = currentPersona === 'ORGANISATEUR' || currentPersona === 'SUPERADMIN' || user.role === 'organisateur' || user.role === 'superadmin';
+  const isOrganizer = currentPersona === 'ORGANISATEUR' || currentPersona === 'SUPERADMIN' || user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN';
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -63,6 +64,8 @@ export const CreateEventPage: React.FC = () => {
   const [newCatPrice, setNewCatPrice] = useState('');
   const [newCatDesc, setNewCatDesc] = useState('');
   const [newCatAvailable, setNewCatAvailable] = useState('');
+
+  const [isCreating, setIsCreating] = useState(false);
 
   const addTicketCategory = () => {
     if (!newCatName.trim()) {
@@ -96,7 +99,14 @@ export const CreateEventPage: React.FC = () => {
     setTicketCategories(ticketCategories.filter((_, idx) => idx !== index));
   };
 
-  const handleCreate = (e: React.FormEvent) => {
+  const CATEGORY_TO_API: Record<string, string> = {
+    sport: 'SPORT',
+    musique: 'CONCERT',
+    religion: 'RELIGIEUX',
+    corporate: 'CORPORATE',
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!title.trim()) {
@@ -139,11 +149,53 @@ export const CreateEventPage: React.FC = () => {
       isFeatured: true
     };
 
-    addEvent(newEvent);
-    alert('Félicitations ! Votre événement a été créé avec succès.');
-    
-    // Redirect directly to the dashboard page of this newly created event!
-    navigate(`/organisateur/dashboard/${eventId}`);
+    setIsCreating(true);
+
+    // Publication réelle côté backend : création (BROUILLON) → tiers → médias → PUBLIE
+    try {
+      const created = await api.events.createEvent({
+        titre: title.trim(),
+        description: description.trim() || 'Aucune description disponible pour cet événement.',
+        categorie: CATEGORY_TO_API[category] || 'AUTRE',
+        affiche: finalImage,
+        lieu: location.trim(),
+        ville: '',
+        date_debut: new Date(`${date}T${time || '18:00'}`).toISOString(),
+        date_fin: null,
+      });
+      const createdId = created && (created.id || created.event_id || created.data?.id)
+        ? String(created.id || created.event_id || created.data?.id)
+        : '';
+      if (!createdId) throw new Error('Réponse backend sans identifiant');
+
+      for (const tier of ticketCategories) {
+        await api.events.createTier(createdId, {
+          nom: tier.name,
+          prix_fbu: tier.price,
+          stock_total: tier.available,
+          moyens_paiement_acceptes: ['LUMICASH', 'LIGHTNING'],
+        });
+      }
+
+      try {
+        await api.events.addMedia(createdId, { type_media: 'IMAGE', url_externe: finalImage });
+      } catch {}
+
+      try {
+        await api.events.updateEvent(createdId, { statut: 'PUBLIE' });
+      } catch {}
+
+      addEvent({ ...newEvent, id: createdId });
+      alert('Félicitations ! Votre événement a été créé et publié avec succès.');
+      navigate(`/organisateur/dashboard/${createdId}`);
+    } catch {
+      // Backend indisponible / non authentifié → repli local (démo)
+      addEvent(newEvent);
+      alert('Félicitations ! Votre événement a été créé avec succès.');
+      navigate(`/organisateur/dashboard/${eventId}`);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   if (!isOrganizer) {
@@ -487,9 +539,10 @@ export const CreateEventPage: React.FC = () => {
         <button
           type="submit"
           id="btn-submit-create-event"
-          className="w-full py-4 bg-brand-primary hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-all cursor-pointer shadow-lg shadow-indigo-500/15"
+          disabled={isCreating}
+          className="w-full py-4 bg-brand-primary hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-all cursor-pointer shadow-lg shadow-indigo-500/15"
         >
-          Créer et Activer l'Événement
+          {isCreating ? 'Publication en cours...' : 'Créer et Activer l\'Événement'}
         </button>
 
       </form>

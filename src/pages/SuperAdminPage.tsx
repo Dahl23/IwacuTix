@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
+import { api } from '../services/apiClient';
+import { ParametrePlateforme, AdminStats, DemandeOrganisateur, TransactionAuditLog, Versement } from '../types';
 import { 
   ChevronLeft, 
   ShieldCheck, 
@@ -34,16 +36,102 @@ export const SuperAdminPage: React.FC = () => {
   const [commissionTaux, setCommissionTaux] = useState(parametrePlateforme.commission_taux_defaut);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  const handleSaveParams = (e: React.FormEvent) => {
+  // Données réelles /api/admin/...
+  const [paramsData, setParamsData] = useState<ParametrePlateforme | null>(null);
+  const [apiStats, setApiStats] = useState<AdminStats | null>(null);
+  const [apiDemandes, setApiDemandes] = useState<DemandeOrganisateur[] | null>(null);
+  const [auditLogs, setAuditLogs] = useState<TransactionAuditLog[] | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const p = await api.admin.getParametresPlateforme();
+        setParamsData(p);
+        setDelaiJours(p.delai_versement_jours);
+        setCommissionTaux(p.commission_taux_defaut);
+      } catch {}
+      try {
+        const s = await api.admin.getStats();
+        setApiStats(s);
+      } catch {}
+      try {
+        const d = await api.admin.getDemandesOrganisateurs();
+        if (d && d.results) setApiDemandes(d.results);
+      } catch {}
+      try {
+        const h = await api.admin.getHistorique();
+        if (h && h.results) setAuditLogs(h.results);
+      } catch {}
+    })();
+  }, []);
+
+  const handleSaveParams = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateParametrePlateforme(delaiJours, commissionTaux);
+    try {
+      const updated = await api.admin.updateParametresPlateforme({
+        delai_versement_jours: delaiJours,
+        commission_taux_defaut: commissionTaux,
+      });
+      setParamsData(updated);
+    } catch {
+      updateParametrePlateforme(delaiJours, commissionTaux);
+    }
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
+  // Décision SuperAdmin sur une demande d'adhésion organisateur
+  const handleDecideDemande = async (id: string, decision: 'APPROUVE' | 'REJETE') => {
+    try {
+      await api.admin.deciderDemandeOrganisateur(id, { statut: decision });
+      const d = await api.admin.getDemandesOrganisateurs();
+      if (d && d.results) setApiDemandes(d.results);
+    } catch {
+      updateOrganisateurKyc(id, decision === 'APPROUVE' ? 'VERIFIE' : 'REJETE');
+    }
+  };
+
+  // Mapping d'une demande API vers l'affichage du panneau SuperAdmin
+  const mapStatutVerification = (statut: DemandeOrganisateur['statut']): 'VERIFIE' | 'EN_ATTENTE' | 'REJETE' => {
+    if (statut === 'APPROUVE') return 'VERIFIE';
+    if (statut === 'REJETE' || statut === 'REJETE_AUTO') return 'REJETE';
+    return 'EN_ATTENTE';
+  };
+
+  const displayOrgs = apiDemandes !== null
+    ? apiDemandes.map((d) => ({
+        id: d.id,
+        nom_structure: d.nom_entreprise,
+        responsable: d.nom_soumis,
+        telephone: d.telephone,
+        email: 'Dossier en attente de validation',
+        statut_verification: mapStatutVerification(d.statut),
+        commission_taux: 5,
+        moyens: ['Dossier d\'adhésion soumis'],
+      }))
+    : organisateursKyc;
+
+  // Journal : historique de transactions API en priorité, sinon versements simulés
+  const journalEntries: Versement[] = auditLogs !== null && auditLogs.length > 0
+    ? auditLogs.map((log) => ({
+        id: String(log.id),
+        organisateur_id: '',
+        organisateur_nom: log.type_evenement || 'Transaction plateforme',
+        canal: (log.canal === 'BITLIBERA' ? 'MOBILE_MONEY' : 'LIGHTNING') as Versement['canal'],
+        montant_fbu: log.montant_fbu ? Number(log.montant_fbu) : undefined,
+        montant_sats: log.montant_sats,
+        destination: log.reference_externe || '-',
+        statut: (log.statut === 'ECHEC' ? 'ECHEC' : log.statut === 'REUSSI' ? 'REUSSI' : 'EN_COURS') as Versement['statut'],
+        reference_transaction: log.reference_externe || `ITX-${log.id}`,
+        date_creation: log.date_creation ? new Date(log.date_creation).toLocaleDateString('fr-FR') : '-',
+      }))
+    : versements;
+
   // Compute platform global stats
-  const totalVolumeFbu = tickets.reduce((sum, t) => sum + t.price, 0);
-  const totalCommissionsFbu = Math.round(totalVolumeFbu * (parametrePlateforme.commission_taux_defaut / 100));
+  const totalVolumeFbu = apiStats ? apiStats.total_fbu_affiche : tickets.reduce((sum, t) => sum + t.price, 0);
+  const totalCommissionsFbu = apiStats
+    ? apiStats.total_commission_sats
+    : Math.round(totalVolumeFbu * ((paramsData?.commission_taux_defaut ?? parametrePlateforme.commission_taux_defaut) / 100));
 
   return (
     <div className="flex-1 flex flex-col bg-[#F8FAFC]">
@@ -80,19 +168,25 @@ export const SuperAdminPage: React.FC = () => {
               {totalVolumeFbu.toLocaleString('fr-FR')} FBu
             </div>
             <span className="text-[10px] text-emerald-600 font-semibold block">
-              +145 200 Sats Lightning ⚡
+              {apiStats
+                ? `${apiStats.nb_billets_vendus} billets • ${apiStats.total_sats.toLocaleString('fr-FR')} Sats ⚡`
+                : '+145 200 Sats Lightning ⚡'}
             </span>
           </div>
 
           <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs space-y-1">
             <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">
-              Commissions Collectées ({parametrePlateforme.commission_taux_defaut}%)
+              Commissions Collectées ({(paramsData?.commission_taux_defaut ?? parametrePlateforme.commission_taux_defaut)}%)
             </span>
             <div className="text-base font-display font-bold text-brand-primary">
-              {totalCommissionsFbu.toLocaleString('fr-FR')} FBu
+              {apiStats
+                ? `${totalCommissionsFbu.toLocaleString('fr-FR')} Sats ⚡`
+                : `${totalCommissionsFbu.toLocaleString('fr-FR')} FBu`}
             </div>
             <span className="text-[10px] text-slate-500 block">
-              Prélevées à la source
+              {apiStats
+                ? `${apiStats.total_net_organisateur_sats.toLocaleString('fr-FR')} Sats nets organisateurs`
+                : 'Prélevées à la source'}
             </span>
           </div>
         </div>
@@ -105,7 +199,7 @@ export const SuperAdminPage: React.FC = () => {
               Configuration Globale (ParametrePlateforme)
             </span>
             <span className="text-[10px] font-mono text-slate-400">
-              Dernière modif : {parametrePlateforme.date_modification}
+              Dernière modif : {paramsData?.date_modification || parametrePlateforme.date_modification}
             </span>
           </div>
 
@@ -186,12 +280,12 @@ export const SuperAdminPage: React.FC = () => {
               Dossiers KYC Organisateurs
             </span>
             <span className="text-[10px] font-mono text-slate-500">
-              {organisateursKyc.length} compte(s)
+              {displayOrgs.length} compte(s)
             </span>
           </div>
 
           <div className="divide-y divide-slate-100">
-            {organisateursKyc.map((org) => (
+            {displayOrgs.map((org) => (
               <div key={org.id} className="p-3.5 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -221,14 +315,14 @@ export const SuperAdminPage: React.FC = () => {
                 {org.statut_verification === 'EN_ATTENTE' && (
                   <div className="flex items-center gap-2 pt-1">
                     <button
-                      onClick={() => updateOrganisateurKyc(org.id, 'VERIFIE')}
+                      onClick={() => void handleDecideDemande(org.id, 'APPROUVE')}
                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       Approuver le KYC
                     </button>
                     <button
-                      onClick={() => updateOrganisateurKyc(org.id, 'REJETE')}
+                      onClick={() => void handleDecideDemande(org.id, 'REJETE')}
                       className="px-3 py-1.5 bg-slate-200 hover:bg-red-100 hover:text-red-700 text-slate-700 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors"
                     >
                       <XCircle className="w-3.5 h-3.5" />
@@ -254,7 +348,7 @@ export const SuperAdminPage: React.FC = () => {
           </div>
 
           <div className="divide-y divide-slate-100">
-            {versements.map((vst) => (
+            {journalEntries.map((vst) => (
               <div key={vst.id} className="p-3 text-xs flex items-center justify-between">
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-1.5">
