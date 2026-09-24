@@ -91,7 +91,7 @@ export const NetflixEventRow: React.FC<NetflixEventRowProps> = ({
       {/* Horizontal Scrolling Card Track */}
       <div
         ref={scrollRef}
-        className="flex gap-4 sm:gap-5 overflow-x-auto pb-3 pt-1 -mx-4 sm:-mx-6 md:-mx-8 lg:-mx-12 px-4 sm:px-6 md:px-8 lg:px-12 scrollbar-none scroll-smooth"
+        className="flex gap-3.5 sm:gap-5 overflow-x-auto pb-3 pt-1 -mx-3 sm:-mx-6 md:-mx-8 lg:-mx-12 px-3 sm:px-6 md:px-8 lg:px-12 scrollbar-none scroll-smooth"
       >
         {events.map((evt, idx) => (
           <div

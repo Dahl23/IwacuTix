@@ -17,7 +17,9 @@ export const HomePage: React.FC = () => {
     selectedCategory, 
     setSelectedCategory, 
     notifications,
-    markAllNotificationsAsRead
+    markAllNotificationsAsRead,
+    isUserVerified,
+    openAuthModal
   } = useApp();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -83,7 +85,7 @@ export const HomePage: React.FC = () => {
         </div>
 
         {/* Categories Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 scrollbar-none">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 scrollbar-none">
           {categories.map((cat) => {
             const Icon = cat.icon;
             const isSelected = selectedCategory === cat.id;
@@ -145,7 +147,13 @@ export const HomePage: React.FC = () => {
               </div>
             ) : (
               <button
-                onClick={() => navigate('/organisateur/verification')}
+                onClick={() => {
+                  if (!isUserVerified) {
+                    openAuthModal("Pour créer des événements et devenir organisateur, vous devez d'abord vous connecter avec votre compte acheteur.");
+                    return;
+                  }
+                  navigate('/organisateur/verification');
+                }}
                 className="px-5 py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/25 flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
               >
                 <ShieldCheck className="w-4 h-4" />

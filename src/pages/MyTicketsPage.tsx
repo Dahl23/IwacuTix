@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { Ticket, Calendar, MapPin, ChevronRight, Inbox } from 'lucide-react';
+import { Ticket, Calendar, MapPin, ChevronRight, Inbox, Lock, Sparkles, ArrowRight } from 'lucide-react';
 
 export const MyTicketsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { tickets } = useApp();
+  const { tickets, isUserVerified, openAuthModal } = useApp();
 
   const [activeTab, setActiveTab] = useState<'valide' | 'utilise'>('valide');
 
-  const filteredTickets = tickets.filter((t) => t.status === activeTab);
+  const userTickets = isUserVerified ? tickets : [];
+  const filteredTickets = userTickets.filter((t) => t.status === activeTab);
 
   const formatPrice = (price: number) => {
     if (price === 0) return 'Gratuit';
@@ -17,96 +18,147 @@ export const MyTicketsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#F8FAFC]">
+    <div className="flex-1 flex flex-col bg-[#F8FAFC] dark:bg-brand-dark transition-colors duration-200">
       
       {/* Top Header */}
-      <div className="px-5 pt-4 pb-1 sticky top-0 bg-white/95 backdrop-blur-md z-30 border-b border-slate-200/80 shadow-sm">
+      <div className="px-4 sm:px-6 pt-4 pb-2 sticky top-16 z-20 bg-white/70 dark:bg-brand-dark/70 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 shadow-xs">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-display font-extrabold text-slate-900 tracking-tight">Portefeuille de Billets</h2>
-          <span className="text-[10px] font-mono bg-orange-50 text-orange-600 border border-orange-200 px-2.5 py-1 rounded-full font-bold uppercase">
+          <div>
+            <h2 className="text-lg sm:text-xl font-display font-black text-slate-900 dark:text-white tracking-tight">
+              Portefeuille de Billets
+            </h2>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              {isUserVerified ? 'Tous vos accès officiels et QR codes' : 'Accès réservé aux comptes acheteurs'}
+            </p>
+          </div>
+          <span className="text-[10px] font-mono bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-500/30 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
             SECURE ACCESS
           </span>
         </div>
 
-        {/* Clickable tabs for filter */}
-        <div className="flex border-b border-slate-100 mt-4.5">
-          <button
-            id="tab-tickets-active"
-            onClick={() => setActiveTab('valide')}
-            className={`flex-1 text-center pb-3 text-xs font-semibold tracking-wide border-b-2 transition-all cursor-pointer ${
-              activeTab === 'valide'
-                ? 'border-orange-500 text-orange-600 font-bold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            À venir ({tickets.filter((t) => t.status === 'valide').length})
-          </button>
-          
-          <button
-            id="tab-tickets-past"
-            onClick={() => setActiveTab('utilise')}
-            className={`flex-1 text-center pb-3 text-xs font-semibold tracking-wide border-b-2 transition-all cursor-pointer ${
-              activeTab === 'utilise'
-                ? 'border-orange-500 text-orange-600 font-bold'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            Historique ({tickets.filter((t) => t.status === 'utilise').length})
-          </button>
-        </div>
+        {/* Clickable tabs for filter (only if connected) */}
+        {isUserVerified && (
+          <div className="flex border-b border-slate-100 dark:border-slate-800 mt-4">
+            <button
+              id="tab-tickets-active"
+              onClick={() => setActiveTab('valide')}
+              className={`flex-1 text-center pb-2.5 text-xs font-semibold tracking-wide border-b-2 transition-all cursor-pointer ${
+                activeTab === 'valide'
+                  ? 'border-orange-500 text-orange-600 dark:text-orange-400 font-bold'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              À venir ({userTickets.filter((t) => t.status === 'valide').length})
+            </button>
+            
+            <button
+              id="tab-tickets-past"
+              onClick={() => setActiveTab('utilise')}
+              className={`flex-1 text-center pb-2.5 text-xs font-semibold tracking-wide border-b-2 transition-all cursor-pointer ${
+                activeTab === 'utilise'
+                  ? 'border-orange-500 text-orange-600 dark:text-orange-400 font-bold'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              Historique ({userTickets.filter((t) => t.status === 'utilise').length})
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Main Content Scroll List */}
-      <div className="p-5 flex-1 space-y-4 overflow-y-auto">
-        {filteredTickets.length === 0 ? (
-          /* High contrast visual empty state */
-          <div className="py-16 text-center my-auto flex flex-col items-center justify-center">
-            <div className="p-5 rounded-full bg-slate-100 text-slate-400 mb-4 border border-slate-200">
+      {/* Main Content Area */}
+      <div className="p-4 sm:p-6 flex-1 flex flex-col space-y-4 overflow-y-auto">
+        
+        {/* CASE 1: USER IS DISCONNECTED */}
+        {!isUserVerified ? (
+          <div className="py-12 sm:py-20 text-center my-auto flex flex-col items-center justify-center max-w-md mx-auto px-4">
+            <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-tr from-orange-500/20 via-amber-500/15 to-orange-500/10 border border-orange-500/30 flex items-center justify-center mb-5 shadow-lg shadow-orange-500/10">
+              <Ticket className="w-9 h-9 sm:w-10 sm:h-10 text-orange-500 rotate-12" />
+            </div>
+            
+            <span className="text-[10px] font-mono font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest bg-orange-50 dark:bg-orange-950/40 px-3 py-1 rounded-full border border-orange-200 dark:border-orange-500/30 mb-2">
+              COMPTE REQUIS
+            </span>
+
+            <h3 className="text-lg sm:text-xl font-display font-black text-slate-900 dark:text-white">
+              Vous n'avez aucun billet pour le moment
+            </h3>
+            
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
+              C'est votre première visite sur IwacuTix ? Pour acheter un ticket et retrouver vos QR codes sécurisés, connectez-vous ou créez votre compte acheteur avec votre numéro de téléphone.
+            </p>
+
+            <div className="w-full max-w-xs mt-6 space-y-2.5">
+              <button
+                id="btn-buy-ticket-empty-state"
+                onClick={() => openAuthModal('Connectez-vous ou créez un compte acheteur pour acheter votre premier ticket.')}
+                className="w-full py-3.5 px-5 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-orange-500/25 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Ticket className="w-4 h-4" />
+                <span>Acheter votre ticket</span>
+              </button>
+
+              <button
+                onClick={() => navigate('/home')}
+                className="w-full py-3 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Explorer les événements d'abord</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        ) : filteredTickets.length === 0 ? (
+          /* CASE 2: CONNECTED BUT NO TICKETS IN THIS TAB */
+          <div className="py-16 text-center my-auto flex flex-col items-center justify-center max-w-sm mx-auto">
+            <div className="p-5 rounded-3xl bg-slate-100 dark:bg-slate-800/80 text-slate-400 mb-4 border border-slate-200 dark:border-slate-700">
               <Inbox className="w-10 h-10" />
             </div>
-            <h3 className="text-sm font-display font-bold text-slate-800">Aucun billet</h3>
-            <p className="text-xs text-slate-500 mt-1 max-w-[220px] leading-relaxed">
-              Vous n'avez aucun billet enregistré dans l'onglet "{activeTab === 'valide' ? 'À venir' : 'Historique'}".
+            <h3 className="text-base font-display font-bold text-slate-800 dark:text-slate-100">
+              Aucun billet {activeTab === 'valide' ? 'à venir' : 'passé'}
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+              {activeTab === 'valide'
+                ? "Vous n'avez aucune réservation à venir. Parcourez la programmation pour réserver vos places !"
+                : "Votre historique d'événements passés est vide."}
             </p>
             {activeTab === 'valide' && (
               <button
                 onClick={() => navigate('/home')}
-                className="mt-6 px-6 py-3 bg-iwacu-gradient hover:opacity-95 text-white font-btn text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-orange-500/20 cursor-pointer active:scale-95 transition-all"
+                className="mt-6 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-orange-500/20 cursor-pointer active:scale-95 transition-all"
               >
                 Trouver des événements
               </button>
             )}
           </div>
         ) : (
-          /* Cards list */
+          /* CASE 3: TICKETS EXIST */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredTickets.map((t) => (
               <div
                 key={t.id}
                 id={`ticket-card-row-${t.id}`}
                 onClick={() => navigate(`/billet/${t.id}`)}
-                className="p-3.5 bg-white hover:bg-slate-50/50 border border-slate-200 rounded-2xl flex items-center gap-4 cursor-pointer group transition-all active:scale-99 shadow-sm hover:border-orange-300"
+                className="p-4 bg-white dark:bg-brand-card hover:bg-slate-50/80 dark:hover:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl flex items-center gap-4 cursor-pointer group transition-all active:scale-99 shadow-sm hover:border-orange-300 dark:hover:border-orange-500/40"
               >
-                {/* Visual stub resembling ticket notches */}
                 <div className="flex-1 min-w-0 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-mono font-bold text-slate-400">
+                    <span className="text-[9px] font-mono font-bold text-slate-400 dark:text-slate-500">
                       ID : {t.id}
                     </span>
                     <span className={`text-[8px] font-mono font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
                       t.status === 'valide' 
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                        : 'bg-slate-100 text-slate-500 border-slate-200/60'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30' 
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200/60 dark:border-slate-700'
                     }`}>
                       {t.status === 'valide' ? 'Valide' : 'Utilisé'}
                     </span>
                   </div>
 
-                  <h4 className="font-display font-bold text-sm text-slate-900 truncate group-hover:text-orange-600 transition-colors">
+                  <h4 className="font-display font-bold text-sm text-slate-900 dark:text-white truncate group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
                     {t.eventTitle}
                   </h4>
 
-                  <div className="space-y-1 text-[11px] text-slate-600">
+                  <div className="space-y-1 text-[11px] text-slate-600 dark:text-slate-400">
                     <div className="flex items-center gap-1.5 font-mono">
                       <Calendar className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                       <span className="truncate">{t.eventDate} • {t.eventTime}</span>
@@ -117,14 +169,13 @@ export const MyTicketsPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] font-mono">
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] font-mono">
                     <span className="text-slate-400 uppercase">Catégorie</span>
-                    <span className="font-bold text-slate-800">{t.categoryName} ({formatPrice(t.price)})</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{t.categoryName} ({formatPrice(t.price)})</span>
                   </div>
                 </div>
 
-                {/* Right caret */}
-                <div className="p-1 rounded-lg bg-slate-50 text-slate-400 border border-slate-100 group-hover:text-slate-700 transition-colors shrink-0">
+                <div className="p-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 border border-slate-100 dark:border-slate-700 group-hover:text-orange-500 transition-colors shrink-0">
                   <ChevronRight className="w-5 h-5" />
                 </div>
               </div>

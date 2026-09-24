@@ -256,13 +256,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logoutUser = () => {
     try {
       localStorage.removeItem('iwacutix_user_profile');
+      localStorage.removeItem('iwacutix_user_tickets');
     } catch {}
     setUser(GUEST_USER);
+    setTickets([]);
     setCurrentPersona('ACHETEUR');
   };
 
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [tickets, setTickets] = useState<TicketPurchased[]>(MOCK_PURCHASED_TICKETS);
+  const [tickets, setTickets] = useState<TicketPurchased[]>(() => {
+    try {
+      const saved = localStorage.getItem('iwacutix_user_tickets');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('iwacutix_user_tickets', JSON.stringify(tickets));
+    } catch {}
+  }, [tickets]);
   const [events, setEvents] = useState<Event[]>(MOCK_EVENTS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tous');

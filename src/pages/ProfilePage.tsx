@@ -462,8 +462,14 @@ export const ProfilePage: React.FC = () => {
           {/* Button to Create Event */}
           <div
             id="btn-create-event-nav"
-            onClick={() => navigate('/organisateur/creer')}
-            className="p-3.5 bg-gradient-to-r from-indigo-500/10 to-indigo-600/5 hover:from-indigo-500/15 hover:to-indigo-600/10 border border-indigo-200 rounded-xl flex items-center justify-between cursor-pointer group transition-all shadow-sm"
+            onClick={() => {
+              if (!isUserVerified) {
+                openAuthModal("Pour créer des événements et devenir organisateur, vous devez d'abord vous connecter avec votre compte acheteur.");
+                return;
+              }
+              navigate('/organisateur/creer');
+            }}
+            className="p-3.5 bg-gradient-to-r from-indigo-500/10 to-indigo-600/5 hover:from-indigo-500/15 hover:to-indigo-600/10 border border-indigo-200 dark:border-slate-700 rounded-xl flex items-center justify-between cursor-pointer group transition-all shadow-sm"
           >
             <div className="flex items-center gap-3.5 min-w-0">
               <div className="p-2.5 rounded-lg bg-indigo-600 text-white shrink-0 group-hover:scale-105 transition-transform">

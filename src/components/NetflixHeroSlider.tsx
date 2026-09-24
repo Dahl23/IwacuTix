@@ -249,25 +249,25 @@ export const NetflixHeroSlider: React.FC<NetflixHeroSliderProps> = ({
             </p>
 
             {/* Netflix-style Call-To-Action Buttons */}
-            <div className="pt-2 flex flex-wrap items-center gap-3">
+            <div className="pt-2 flex flex-row items-center gap-2 sm:gap-3 w-full">
               {/* Primary Action Button (like Netflix Play) */}
               <button
                 id={`btn-netflix-hero-book-${currentEvent.id}`}
                 onClick={() => navigate(`/evenement/${currentEvent.id}`)}
-                className="flex items-center justify-center gap-2.5 px-6 py-3 sm:py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white font-extrabold text-sm sm:text-base shadow-xl shadow-orange-500/25 active:scale-95 transition-all cursor-pointer group/btn"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white font-extrabold text-xs sm:text-base shadow-lg sm:shadow-xl shadow-orange-500/25 active:scale-95 transition-all cursor-pointer group/btn truncate"
               >
-                <Ticket className="w-5 h-5 group-hover/btn:rotate-12 transition-transform" />
-                <span>Réserver mon ticket</span>
+                <Ticket className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 group-hover/btn:rotate-12 transition-transform" />
+                <span className="truncate">Réserver mon ticket</span>
               </button>
 
               {/* Secondary Info Button (like Netflix More Info) */}
               <button
                 id={`btn-netflix-hero-info-${currentEvent.id}`}
                 onClick={() => navigate(`/evenement/${currentEvent.id}`)}
-                className="flex items-center justify-center gap-2 px-5 py-3 sm:py-3.5 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-bold text-sm sm:text-base backdrop-blur-md border border-white/20 active:scale-95 transition-all cursor-pointer"
+                className="flex items-center justify-center gap-1.5 px-3 sm:px-5 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs sm:text-base backdrop-blur-md border border-white/20 active:scale-95 transition-all cursor-pointer shrink-0"
               >
-                <Info className="w-4.5 h-4.5 text-white" />
-                <span>Plus d'infos</span>
+                <Info className="w-4 h-4 text-white" />
+                <span>Infos</span>
               </button>
             </div>
 

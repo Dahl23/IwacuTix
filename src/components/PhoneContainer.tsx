@@ -97,12 +97,13 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
       <OfflineIndicator />
       
       {/* ================= FIXED STABLE RESPONSIVE NAVBAR ================= */}
-      <header className="fixed top-0 left-0 right-0 z-50 w-full bg-white/95 dark:bg-brand-dark/95 bg-gradient-to-r from-orange-500/10 via-white dark:via-brand-dark to-orange-500/10 backdrop-blur-xl border-b border-orange-200/60 dark:border-slate-800 shadow-xs shrink-0 transition-all">
-        <div className="w-full max-w-[1560px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 h-16 sm:h-18 flex items-center justify-between">
+      <header className="fixed top-0 left-0 right-0 z-50 w-full bg-white/65 dark:bg-[#090A0F]/70 backdrop-blur-2xl border-b border-orange-500/10 dark:border-white/10 shadow-xs shrink-0 transition-all">
+        <div className="w-full max-w-[1560px] mx-auto px-3 sm:px-6 md:px-8 lg:px-12 h-15 sm:h-18 flex items-center justify-between">
           
           {/* Left: Branding & Logo */}
-          <Link to="/home" className="flex items-center gap-3 active:scale-95 transition-all">
-            <IwacuTixLogo size="md" showTagline={true} />
+          <Link to="/home" className="flex items-center gap-2 sm:gap-3 active:scale-95 transition-all shrink-0">
+            <IwacuTixLogo size="sm" className="sm:hidden" showTagline={false} />
+            <IwacuTixLogo size="md" className="hidden sm:flex" showTagline={true} />
           </Link>
 
           {/* Center: Clean Desktop Navigation Links */}
@@ -128,7 +129,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
           </nav>
 
           {/* Right: Theme Toggle, Unified User Profile Menu & Mobile Toggle */}
-          <div className="flex items-center gap-2 sm:gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2.5">
             
             {/* Dark Mode Toggle */}
             <ThemeToggle variant="compact" />
@@ -137,15 +138,15 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
             <div className="relative" ref={profileMenuRef}>
               <button
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                className={`flex items-center gap-2 p-1.5 pl-2 pr-3 rounded-full border transition-all shadow-xs cursor-pointer active:scale-95 group ${
+                className={`flex items-center gap-1.5 sm:gap-2 p-1 sm:p-1.5 pl-1.5 sm:pl-2 pr-2 sm:pr-3 rounded-full border transition-all shadow-xs cursor-pointer active:scale-95 group ${
                   !isUserVerified
-                    ? 'bg-amber-50/90 dark:bg-brand-slate hover:bg-amber-100/80 dark:hover:bg-slate-800 border-amber-300 dark:border-amber-600/40 text-amber-900 dark:text-amber-400'
-                    : 'bg-white/80 dark:bg-brand-slate hover:bg-white dark:hover:bg-slate-800 border-orange-200/70 dark:border-slate-700 text-slate-800 dark:text-slate-100'
+                    ? 'bg-amber-50/70 dark:bg-brand-slate/70 hover:bg-amber-100/80 dark:hover:bg-slate-800 border-amber-300/80 dark:border-amber-600/40 text-amber-900 dark:text-amber-400'
+                    : 'bg-white/70 dark:bg-brand-slate/70 hover:bg-white dark:hover:bg-slate-800 border-orange-200/60 dark:border-slate-700 text-slate-800 dark:text-slate-100'
                 }`}
                 title="Menu utilisateur"
               >
                 <div className="relative">
-                  <div className="w-8 h-8 rounded-full overflow-hidden border border-orange-200 dark:border-slate-700 shrink-0 shadow-xs bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden border border-orange-200 dark:border-slate-700 shrink-0 shadow-xs bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
                     <img referrerPolicy="no-referrer" src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
                   </div>
                   {unreadNotifications > 0 && (
@@ -454,7 +455,13 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                 </Link>
               ) : (
                 <button
-                  onClick={() => switchPersona('ORGANISATEUR')}
+                  onClick={() => {
+                    if (!isUserVerified) {
+                      openAuthModal("Pour devenir organisateur ou accéder à l'espace organisateur, vous devez d'abord vous connecter avec votre compte acheteur.");
+                      return;
+                    }
+                    switchPersona('ORGANISATEUR');
+                  }}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-orange-300 hover:text-white border border-slate-700 font-bold text-[11px] transition-all cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-brand-primary" />
@@ -480,7 +487,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
       </footer>
 
       {/* ================= FIXED STABLE MOBILE BOTTOM BAR ================= */}
-      <nav aria-label="Navigation mobile" className="md:hidden fixed bottom-0 left-0 right-0 z-40 w-full bg-white/95 dark:bg-brand-dark/95 bg-gradient-to-r from-orange-500/15 via-white dark:via-brand-dark to-orange-500/15 backdrop-blur-xl border-t border-orange-200/80 dark:border-slate-800 px-3 pt-2 pb-[calc(0.6rem+env(safe-area-inset-bottom,0px))] flex items-center justify-around shrink-0 shadow-[0_-4px_24px_-2px_rgba(249,115,22,0.14)]">
+      <nav aria-label="Navigation mobile" className="md:hidden fixed bottom-0 left-0 right-0 z-40 w-full bg-white/70 dark:bg-[#090A0F]/75 backdrop-blur-2xl border-t border-orange-500/15 dark:border-white/10 px-1.5 sm:px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] flex items-center justify-around shrink-0 shadow-[0_-4px_24px_-2px_rgba(0,0,0,0.12)]">
         {navItems.map((item) => {
           const isActive = path === item.path || (item.path === '/home' && (path === '/' || path === ''));
           const Icon = item.icon;
@@ -488,12 +495,17 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-xl transition-all ${
+              className={`flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl transition-all flex-1 min-w-0 ${
                 isActive ? 'text-orange-600 dark:text-orange-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:text-orange-950 dark:hover:text-white'
               }`}
             >
-              <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5px]' : 'stroke-[2px]'}`} />
-              <span className="text-[9px] font-medium tracking-tight">{item.label}</span>
+              <div className="relative flex items-center justify-center">
+                <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5px] scale-105' : 'stroke-[2px]'}`} />
+                {item.path === '/mes-billets' && tickets.length > 0 && isUserVerified && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 rounded-full" />
+                )}
+              </div>
+              <span className="text-[10px] font-semibold tracking-tight truncate w-full text-center">{item.label}</span>
             </Link>
           );
         })}
