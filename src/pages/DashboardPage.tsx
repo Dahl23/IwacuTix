@@ -250,7 +250,7 @@ export const DashboardPage: React.FC = () => {
             {/* FBu Wallet */}
             <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-1">
               <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider block">
-                Solde Mobile Money (FBu)
+                Solde Lumicash (FBu)
               </span>
               <div className="text-sm font-mono font-bold text-white truncate">
                 {portefeuille.solde_disponible_fbu.toLocaleString('fr-FR')} FBu

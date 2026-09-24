@@ -31,7 +31,8 @@ export const TicketSelectionPage: React.FC = () => {
 
   const handleIncrement = (categoryName: string) => {
     setQuantities((prev) => ({
-      ...prev,
+      // The backend order endpoint accepts one tier_id per command.
+      // Keep the purchase focused on one ticket category at a time.
       [categoryName]: (prev[categoryName] || 0) + 1,
     }));
   };
@@ -64,7 +65,13 @@ export const TicketSelectionPage: React.FC = () => {
     event.ticketCategories.forEach((cat) => {
       const qty = quantities[cat.name] || 0;
       if (qty > 0) {
-        addToCart(event.id, event.title, cat.name, qty, cat.price);
+        addToCart(event.id, event.title, cat.name, qty, cat.price, {
+          tierId: cat.tierId || cat.id,
+          eventDate: event.date,
+          eventTime: event.time,
+          eventLocation: event.location,
+          moyens_paiement_acceptes: cat.moyens_paiement_acceptes,
+        });
       }
     });
 

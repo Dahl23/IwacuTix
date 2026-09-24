@@ -142,7 +142,7 @@ export const RoleSwitcherBanner: React.FC = () => {
           </p>
           <ul className="list-disc pl-4 space-y-1 text-slate-300 text-[10px]">
             <li><strong className="text-amber-300">Acheteur :</strong> Compte allégé créé lors du 1er achat, vérifié par SMS OTP, sans mot de passe obligatoire.</li>
-            <li><strong className="text-emerald-300">Organisateur :</strong> Compte pro vérifié (KYC), gestion multi-événements, jauge des places, et reversement automatique (Mobile Money + Lightning).</li>
+            <li><strong className="text-emerald-300">Organisateur :</strong> Compte pro vérifié (KYC), gestion multi-événements, jauge des places, et reversement automatique (Lumicash + Lightning).</li>
             <li><strong className="text-cyan-300">Scanneur :</strong> N'est PAS un rôle global en base ! Capacité conférée par un <code>ScanneurAssignment(user_id, event_id)</code> actif.</li>
             <li><strong className="text-purple-300">SuperAdmin :</strong> Supervise la plateforme, valide les dossiers KYC et configure les reversements (<code>ParametrePlateforme</code>).</li>
           </ul>

@@ -1,13 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { Ticket, Calendar, MapPin, ChevronRight, Inbox } from 'lucide-react';
 
 export const MyTicketsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { tickets } = useApp();
+  const { tickets, refreshTicketsFromApi } = useApp();
 
   const [activeTab, setActiveTab] = useState<'valide' | 'utilise'>('valide');
+
+  useEffect(() => {
+    refreshTicketsFromApi().catch(() => {});
+  }, []);
 
   const filteredTickets = tickets.filter((t) => t.status === activeTab);
 

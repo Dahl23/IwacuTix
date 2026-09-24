@@ -172,7 +172,7 @@ export const CreateEventPage: React.FC = () => {
               Pourquoi passer au compte Organisateur ?
             </p>
             <ul className="text-[11px] text-slate-600 space-y-1.5 pl-4 list-disc marker:text-brand-primary">
-              <li>Vendez vos billets instantanément via Lumicash, EcoCash & Bancobu</li>
+              <li>Vendez vos billets via Lumicash et Lightning / Blink</li>
               <li>Encaissement direct et tableau de bord financier en temps réel</li>
               <li>Scannez et validez les QR codes de vos participants le jour J</li>
             </ul>

@@ -14,7 +14,7 @@ import {
   Sparkles,
   Info
 } from 'lucide-react';
-import { api, setStoredTokens } from '../services/apiClient';
+import { api, getApiConnectionStatus, setStoredTokens } from '../services/apiClient';
 import { useApp } from '../AppContext';
 
 interface AuthModalProps {
@@ -76,15 +76,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
 
     try {
-      // Tenter l'appel API réel si backend dispo
-      const demoCode = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedDemoCode(demoCode);
-      setOtpCode(demoCode); // Pré-remplir automatiquement pour une expérience fluide
+      await api.auth.demanderOtp(cleanPhone);
 
-      try {
-        await api.auth.demanderOtp(cleanPhone);
-      } catch {
-        // Fallback dev simulation
+      if (getApiConnectionStatus() === false) {
+        setGeneratedDemoCode('123456');
+        setOtpCode('123456');
+      } else {
+        setGeneratedDemoCode('');
+        setOtpCode('');
       }
 
       setSuccessMsg(`Code de vérification envoyé par SMS au ${cleanPhone}`);
@@ -106,22 +105,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const cleanPhone = phone.trim();
 
     try {
-      try {
-        const res = await api.auth.verifierOtp(cleanPhone, otpCode.trim());
-        setStoredTokens(res.access, res.refresh);
-      } catch {
-        // Mode simulation si backend non connecté
-        setStoredTokens('mock_jwt_access_' + Date.now(), 'mock_jwt_refresh_' + Date.now());
-      }
+      const res = await api.auth.verifierOtp(cleanPhone, otpCode.trim());
+      setStoredTokens(res.access, res.refresh);
 
       // Enregistrer et marquer le profil acheteur comme vérifié avec le nom complet fourni
       const updatedData = {
-        id: user.id && user.id !== 'guest' ? user.id : 'usr-buyer-' + Date.now(),
+        id: res.user.id,
         name: trimmedName,
-        phone: cleanPhone,
-        role: 'ACHETEUR' as const,
-        statut_compte: 'ACTIF' as const,
-        telephone_verifie: true,
+        phone: res.user.telephone || cleanPhone,
+        email: res.user.email || user.email,
+        role: res.user.role,
+        statut_compte: res.user.statut_compte,
+        telephone_verifie: res.user.telephone_verifie,
       };
 
       updateUserProfile(updatedData);
@@ -347,20 +342,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     />
                   </div>
 
-                  {/* Test notification badge */}
-                  <div className="p-2.5 bg-orange-50/70 border border-orange-200/70 rounded-xl flex items-center justify-between text-[11px]">
-                    <span className="text-slate-600 flex items-center gap-1.5">
-                      <Info className="w-3.5 h-3.5 text-brand-primary" />
-                      Code SMS : <strong>{generatedDemoCode}</strong>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setOtpCode(generatedDemoCode)}
-                      className="text-[10px] font-bold text-brand-primary hover:underline cursor-pointer"
-                    >
-                      Insérer le code
-                    </button>
-                  </div>
+                  {generatedDemoCode && (
+                    <div className="p-2.5 bg-orange-50/70 border border-orange-200/70 rounded-xl flex items-center justify-between text-[11px]">
+                      <span className="text-slate-600 flex items-center gap-1.5">
+                        <Info className="w-3.5 h-3.5 text-brand-primary" />
+                        Code demo : <strong>{generatedDemoCode}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setOtpCode(generatedDemoCode)}
+                        className="text-[10px] font-bold text-brand-primary hover:underline cursor-pointer"
+                      >
+                        Insérer le code
+                      </button>
+                    </div>
+                  )}
 
                   <p className="text-[10px] text-slate-400 text-center">
                     Compte : <strong>{nomComplet}</strong> ({phone})

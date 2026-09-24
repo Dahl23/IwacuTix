@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
+import { api } from '../services/apiClient';
+import { apiTicketToPurchased } from '../services/apiMappers';
 import { 
   ChevronLeft, 
   QrCode, 
@@ -24,7 +26,8 @@ export const ScannerPage: React.FC = () => {
     events, 
     tickets, 
     scanneurAssignments, 
-    scanTicketWithSecurity, 
+    scanTicketWithSecurity,
+    refreshTicketsFromApi,
     scanLogs 
   } = useApp();
 
@@ -48,13 +51,50 @@ export const ScannerPage: React.FC = () => {
     (a) => a.event_id === selectedEventId && a.actif && (a.user_id === user.id || a.user_telephone === user.phone)
   ) || user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN';
 
-  const handleScan = (codeToScan?: string) => {
+  const handleScan = async (codeToScan?: string) => {
     const code = codeToScan || inputCode;
     if (!code.trim()) return;
 
-    const result = scanTicketWithSecurity(code.trim(), selectedEventId);
-    setLastScanResult(result);
-    if (!codeToScan) setInputCode('');
+    try {
+      const apiResult = await api.tickets.valider(code.trim());
+
+      if (apiResult.statut === 'ACCEPTE' && apiResult.ticket) {
+        const ticket = apiTicketToPurchased(apiResult.ticket, events);
+        setLastScanResult({
+          success: true,
+          message: `Entrée autorisée — ${apiResult.ticket.tiers_lib}`,
+          ticket,
+        });
+        await refreshTicketsFromApi();
+      } else {
+        setLastScanResult({
+          success: false,
+          message: apiResult.error || 'Billet rejeté',
+          reason: apiResult.code || 'validation_rejetee',
+        });
+      }
+    } catch (err: any) {
+      const codeMachine = err?.code || 'ticket_invalide';
+      const displayMessage =
+        codeMachine === 'ticket_deja_scanne'
+          ? 'Déjà scanné'
+          : codeMachine === 'acces_interdit'
+            ? 'Accès refusé au poste de scan'
+            : err?.error || 'Billet invalide';
+
+      setLastScanResult({
+        success: false,
+        message: displayMessage,
+        reason: err?.error || codeMachine,
+      });
+
+      if (!err?.code) {
+        const localResult = scanTicketWithSecurity(code.trim(), selectedEventId);
+        setLastScanResult(localResult);
+      }
+    } finally {
+      if (!codeToScan) setInputCode('');
+    }
   };
 
   // Test ticket helpers

@@ -152,7 +152,7 @@ export const SuperAdminPage: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-[9px] text-slate-400">
-                  Retenue automatiquement sur les flux Mobile Money & Lightning.
+                  Retenue automatiquement sur les flux Lumicash & Lightning.
                 </p>
               </div>
             </div>

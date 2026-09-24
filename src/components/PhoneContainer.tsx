@@ -389,7 +389,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                 <IwacuTixLogo size="md" theme="dark" showTagline={false} />
               </div>
               <p className="text-xs text-slate-400 leading-relaxed font-normal">
-                <strong className="text-white font-bold">IwacuTix</strong> — Tes tickets, tes événements. La billetterie digitale et mobile de nouvelle génération au Burundi. Achetez vos tickets instantanément via Lumicash, EcoCash ou Bancobu et vibrez au rythme des meilleurs concerts, festivals, matchs et spectacles.
+                <strong className="text-white font-bold">IwacuTix</strong> — Tes tickets, tes événements. La billetterie digitale et mobile de nouvelle génération au Burundi. Achetez vos tickets via Lumicash ou Lightning et vibrez au rythme des meilleurs concerts, festivals, matchs et spectacles.
               </p>
             </div>
 

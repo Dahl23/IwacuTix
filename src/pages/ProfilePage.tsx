@@ -141,9 +141,9 @@ export const ProfilePage: React.FC = () => {
     },
     {
       label: 'Moyens de paiement enregistrés',
-      description: 'Lumicash & Ecocash + Bitcoin Lightning (Blink)',
+      description: 'Lumicash + Bitcoin Lightning (Blink)',
       icon: CreditCard,
-      action: () => alert(`Votre compte Mobile Money (${user.phone}) et portefeuille Lightning sont configurés.`)
+      action: () => alert(`Votre compte Lumicash (${user.phone}) et portefeuille Lightning sont configurés.`)
     },
     {
       label: 'Sécurité & Authentification OTP',
