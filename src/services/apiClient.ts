@@ -163,7 +163,7 @@ async function request<T>(
     if (err instanceof TypeError && err.message.includes('fetch')) {
       isBackendLive = false;
       console.warn(`[IwacuTix API] Backend ${API_BASE_URL} momentanément inaccessible. Fallback local.`);
-      return mockFallback<T>(endpoint, options);
+      return rejectBackendUnavailable<T>(endpoint, options);
     }
     throw err;
   }
@@ -173,7 +173,7 @@ async function request<T>(
  * Repli hors-ligne : ne fabrique JAMAIS de données de test.
  * Toute requête non aboutie remonte une erreur backend_indisponible réelle.
  */
-function mockFallback<T>(_endpoint: string, _options: RequestInit): Promise<T> {
+function rejectBackendUnavailable<T>(_endpoint: string, _options: RequestInit): Promise<T> {
   throw {
     error: 'Backend momentanément indisponible. Réessayez dans quelques secondes (démarrage Render).',
     code: 'backend_indisponible',

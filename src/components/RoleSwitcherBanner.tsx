@@ -35,7 +35,7 @@ export const RoleSwitcherBanner: React.FC = () => {
       icon: Building2,
       accentColor: 'text-emerald-700',
       bgColor: 'bg-emerald-50 border-emerald-200',
-      targetRoute: '/organisateur/dashboard/evt-vital-o-vs-le-messager'
+      targetRoute: '/organisateur/dashboard'
     },
     {
       key: 'SCANNEUR',
@@ -95,7 +95,7 @@ export const RoleSwitcherBanner: React.FC = () => {
 
           {currentPersona === 'ORGANISATEUR' && (
             <button
-              onClick={() => navigate('/organisateur/dashboard/evt-vital-o-vs-le-messager')}
+              onClick={() => navigate('/organisateur/dashboard')}
               className="text-[10px] px-2 py-0.5 rounded bg-emerald-600/30 hover:bg-emerald-600/40 text-emerald-300 font-medium flex items-center gap-1 border border-emerald-500/30"
             >
               Dashboard <ArrowRight className="w-2.5 h-2.5" />

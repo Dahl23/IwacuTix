@@ -45,7 +45,7 @@ export const ScannerPage: React.FC = () => {
     (a) => a.actif && (a.user_id === user.id || a.user_telephone === user.phone || user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN')
   );
 
-  const defaultEventId = userAssignments[0]?.event_id || 'evt-vital-o-vs-le-messager';
+  const defaultEventId = userAssignments[0]?.event_id || '';
   const [selectedEventId, setSelectedEventId] = useState<string>(defaultEventId);
   const [inputCode, setInputCode] = useState('');
   const [lastScanResult, setLastScanResult] = useState<{

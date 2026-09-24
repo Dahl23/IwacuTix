@@ -15,7 +15,6 @@ import {
 import { api, API_BASE_URL, getStoredAccessToken } from './services/apiClient';
 import { apiEventToEvent, apiTicketToPurchased, apiUserToUser } from './services/apiMappers';
 import { 
-  MOCK_EVENTS,
   DEFAULT_ANONYMOUS_AVATAR,
   GUEST_USER
 } from './data';
@@ -278,8 +277,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem('iwacutix_user_tickets', JSON.stringify(tickets));
     } catch {}
   }, [tickets]);
-  const [events, setEvents] = useState<Event[]>(MOCK_EVENTS);
-  const eventsRef = useRef<Event[]>(MOCK_EVENTS);
+  const [events, setEvents] = useState<Event[]>([]);
+  const eventsRef = useRef<Event[]>([]);
   useEffect(() => {
     eventsRef.current = events;
   }, [events]);
@@ -314,7 +313,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       if (fetched.length > 0) setEvents(fetched);
     } catch {
-      // Backend indisponible → MOCK_EVENTS conservés
+      // Backend indisponible → liste vide conservée
     }
   }, []);
 
