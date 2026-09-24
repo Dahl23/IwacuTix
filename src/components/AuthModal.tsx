@@ -40,10 +40,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // Acheteur state: Nom & Prénom + Numéro de téléphone
   const [nomComplet, setNomComplet] = useState(user.name && user.id !== 'guest' ? user.name : '');
-  const [phone, setPhone] = useState(user.phone || '+257 69 123 456');
+  const [phone, setPhone] = useState(user.phone || '');
   const [otpCode, setOtpCode] = useState('');
   const [step, setStep] = useState<'PHONE' | 'OTP'>('PHONE');
-  const [generatedDemoCode, setGeneratedDemoCode] = useState('123456');
 
   // Organisateur / Admin state (for direct pro login)
   const [identifiant, setIdentifiant] = useState('');
@@ -76,18 +75,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
 
     try {
-      // Tenter l'appel API réel si backend dispo
-      const demoCode = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedDemoCode(demoCode);
-      setOtpCode(demoCode); // Pré-remplir automatiquement pour une expérience fluide
-
-      try {
-        await api.auth.demanderOtp(cleanPhone);
-      } catch {
-        // Fallback dev simulation
-      }
-
-      setSuccessMsg(`Code de vérification envoyé par SMS au ${cleanPhone}`);
+      // Demande réelle : le backend envoie le code OTP par SMS au téléphone
+      const res = await api.auth.demanderOtp(cleanPhone);
+      setOtpCode('');
+      setSuccessMsg(
+        res?.message || `Code de v�rification envoy� par SMS au ${cleanPhone}`
+      );
       setStep('OTP');
     } catch (err: any) {
       setError(err?.error || err?.telephone?.[0] || 'Erreur lors de la demande du code de vérification.');
@@ -106,13 +99,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const cleanPhone = phone.trim();
 
     try {
-      try {
-        const res = await api.auth.verifierOtp(cleanPhone, otpCode.trim());
-        setStoredTokens(res.access, res.refresh);
-      } catch {
-        // Mode simulation si backend non connecté
-        setStoredTokens('mock_jwt_access_' + Date.now(), 'mock_jwt_refresh_' + Date.now());
-      }
+      const res = await api.auth.verifierOtp(cleanPhone, otpCode.trim());
+      setStoredTokens(res.access, res.refresh);
 
       // Enregistrer et marquer le profil acheteur comme vérifié avec le nom complet fourni
       const updatedData = {
@@ -347,19 +335,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     />
                   </div>
 
-                  {/* Test notification badge */}
-                  <div className="p-2.5 bg-orange-50/70 border border-orange-200/70 rounded-xl flex items-center justify-between text-[11px]">
-                    <span className="text-slate-600 flex items-center gap-1.5">
-                      <Info className="w-3.5 h-3.5 text-brand-primary" />
-                      Code SMS : <strong>{generatedDemoCode}</strong>
+                  {/* Notification d'information */}
+                  <div className="p-2.5 bg-slate-50 border border-slate-200/70 rounded-xl flex items-center gap-1.5 text-[11px]">
+                    <Info className="w-3.5 h-3.5 text-brand-primary" />
+                    <span className="text-slate-600">
+                      Saisissez le code à 6 chiffres que vous avez reçu par SMS.
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setOtpCode(generatedDemoCode)}
-                      className="text-[10px] font-bold text-brand-primary hover:underline cursor-pointer"
-                    >
-                      Insérer le code
-                    </button>
                   </div>
 
                   <p className="text-[10px] text-slate-400 text-center">

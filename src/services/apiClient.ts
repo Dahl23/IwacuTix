@@ -9,9 +9,7 @@ import {
   ApiTier, 
   ApiMedia, 
   PaginatedResponse,
-  PortefeuilleOrganisateur,
   ParametrePlateforme,
-  Versement,
   ScanneurAssignment,
   OrganisateurProfilApi,
   OrganisateurStats,
@@ -23,7 +21,6 @@ import {
   TransactionAuditLog,
   ApiDestinataireBillet
 } from '../types';
-import { MOCK_EVENTS } from '../data';
 
 // Configuration de l'URL de base selon la documentation
 // URL officielle du backend Render : https://iwacutix-api.onrender.com
@@ -72,23 +69,6 @@ const onTokenRefreshed = (token: string) => {
   refreshSubscribers.forEach((cb) => cb(token));
   refreshSubscribers = [];
 };
-
-/**
- * Calculateur HMAC-SHA256 en Web Crypto API pour simuler les webhooks Mobile Money en dev
- */
-export async function computeHmacSha256Hex(secret: string, message: string): Promise<string> {
-  const enc = new TextEncoder();
-  const key = await window.crypto.subtle.importKey(
-    'raw',
-    enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const signature = await window.crypto.subtle.sign('HMAC', key, enc.encode(message));
-  const hashArray = Array.from(new Uint8Array(signature));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
 
 /**
  * Client HTTP centralisé avec interception JWT, injection Bearer et rafraîchissement automatique
@@ -190,225 +170,14 @@ async function request<T>(
 }
 
 /**
- * Fallback haute-fidélité pour le mode hors-ligne
+ * Repli hors-ligne : ne fabrique JAMAIS de données de test.
+ * Toute requête non aboutie remonte une erreur backend_indisponible réelle.
  */
-function mockFallback<T>(endpoint: string, options: RequestInit): Promise<T> {
-  const method = (options.method || 'GET').toUpperCase();
-  const body = options.body ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body) : {};
-
-  // 1. Authentification
-  if (endpoint.includes('/api/auth/demander-otp/')) {
-    return Promise.resolve({
-      message: 'Code OTP envoyé.',
-      telephone: body.telephone || '+25779123456',
-    } as unknown as T);
-  }
-
-  if (endpoint.includes('/api/auth/verifier-otp/')) {
-    const mockAuth: ApiAuthResponse = {
-      access: 'mock_jwt_access_token_' + Date.now(),
-      refresh: 'mock_jwt_refresh_token_' + Date.now(),
-      user: {
-        id: '9f1a2b3c-4d5e-6f70-8192-a1b2c3d4e5f6',
-        nom_complet: 'Jean Ntakirutimana (Client OTP)',
-        email: null,
-        telephone: body.telephone || '+25779123456',
-        role: 'ACHETEUR',
-        statut_compte: 'ACTIF',
-        telephone_verifie: true,
-        date_creation: new Date().toISOString(),
-      },
-    };
-    setStoredTokens(mockAuth.access, mockAuth.refresh);
-    return Promise.resolve(mockAuth as unknown as T);
-  }
-
-  if (endpoint.includes('/api/auth/login/')) {
-    const isSuperAdmin = body.identifiant?.toLowerCase().includes('admin');
-    const mockAuth: ApiAuthResponse = {
-      access: 'mock_jwt_access_token_' + Date.now(),
-      refresh: 'mock_jwt_refresh_token_' + Date.now(),
-      user: {
-        id: isSuperAdmin ? '11111111-1111-1111-1111-111111111111' : '88888888-8888-8888-8888-888888888888',
-        nom_complet: isSuperAdmin ? 'SuperAdmin HQ IwacuTix' : 'Iwacu Events SA (Organisateur)',
-        email: body.identifiant?.includes('@') ? body.identifiant : 'contact@iwacutix.bi',
-        telephone: '+25770000000',
-        role: isSuperAdmin ? 'SUPERADMIN' : 'ORGANISATEUR',
-        statut_compte: 'ACTIF',
-        telephone_verifie: true,
-        date_creation: new Date().toISOString(),
-      },
-    };
-    setStoredTokens(mockAuth.access, mockAuth.refresh);
-    return Promise.resolve(mockAuth as unknown as T);
-  }
-
-  // 2. Marketplace publique des événements
-  if (endpoint.startsWith('/api/public/evenements/')) {
-    const idMatch = endpoint.match(/\/api\/public\/evenements\/([a-zA-Z0-9_-]+)\//);
-    if (idMatch) {
-      const evtId = idMatch[1];
-      const found = MOCK_EVENTS.find((e) => e.id === evtId) || MOCK_EVENTS[0];
-      const detailed: ApiEvenementPublic = {
-        id: found.id,
-        titre: found.title,
-        description: found.description,
-        affiche: found.imageUrl,
-        lieu: found.location,
-        ville: 'Bujumbura',
-        date_debut: '2026-12-01T18:00:00Z',
-        date_fin: null,
-        categorie: (found.category.toUpperCase() as any) || 'CONCERT',
-        organisateur: found.organisateur,
-        tiers: found.ticketCategories.map((tc, idx) => ({
-          id: `tier-uuid-${idx + 1}`,
-          nom: tc.name,
-          prix_fbu: tc.price.toFixed(2),
-          stock_disponible: tc.available,
-          stock_total: tc.available + 50,
-          moyens_paiement_acceptes: tc.moyens_paiement_acceptes || ['LUMICASH', 'LIGHTNING'],
-        })),
-        medias: [
-          {
-            id: 'media-yt-demo',
-            type_media: 'VIDEO',
-            fichier: null,
-            url_externe: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-            ordre: 0,
-            date_ajout: '2026-09-20T09:00:00Z',
-          },
-        ],
-      };
-      return Promise.resolve(detailed as unknown as T);
-    }
-
-    // Liste paginée
-    const listResponse: PaginatedResponse<ApiEvenementPublic> = {
-      count: MOCK_EVENTS.length,
-      next: null,
-      previous: null,
-      results: MOCK_EVENTS.map((e) => ({
-        id: e.id,
-        titre: e.title,
-        description: e.description,
-        affiche: e.imageUrl,
-        lieu: e.location,
-        ville: 'Bujumbura',
-        date_debut: '2026-12-01T18:00:00Z',
-        date_fin: null,
-        categorie: (e.category.toUpperCase() as any) || 'CONCERT',
-        organisateur: e.organisateur,
-      })),
-    };
-    return Promise.resolve(listResponse as unknown as T);
-  }
-
-  // 3. Commandes & Billets
-  if (endpoint.includes('/api/tickets/commandes/lumicash/demander-otp/') && method === 'POST') {
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    const orderId = 'order-' + Math.random().toString(36).substring(2, 9);
-    const mockRes: LumicashDemanderOtpResponse = {
-      order: {
-        id: orderId,
-        event_titre: 'Concert & Match IwacuTix',
-        tiers_lib: 'Tribune',
-        quantite: body.quantite || 1,
-        montant_fbu: (30000 * (body.quantite || 1)).toFixed(2),
-        montant_sats: null,
-        moyen_paiement: 'LUMICASH',
-        statut: 'PENDING',
-        expires_at: expiresAt,
-        date_creation: new Date().toISOString(),
-      },
-      next: '/api/tickets/commandes/lumicash/confirmer/',
-      paiement: {
-        type: 'lumicash_onramp',
-        provider: 'bitlibera',
-        montant_fbu: (30000 * (body.quantite || 1)).toFixed(2),
-        instruction: "Un OTP Lumicash vient d'être envoyé par SMS. Confirmez avec l'OTP.",
-      },
-    };
-    return Promise.resolve(mockRes as unknown as T);
-  }
-
-  if (endpoint.includes('/api/tickets/commandes/lumicash/confirmer/') && method === 'POST') {
-    const mockRes: LumicashConfirmerResponse = {
-      order: {
-        id: body.order_id || 'order-test',
-        event_titre: 'Concert & Match IwacuTix',
-        tiers_lib: 'Tribune',
-        quantite: 1,
-        montant_fbu: '30000.00',
-        montant_sats: null,
-        moyen_paiement: 'LUMICASH',
-        statut: 'SUCCESS',
-        expires_at: new Date().toISOString(),
-        date_creation: new Date().toISOString(),
-      },
-      message: 'Paiement confirmé et billets émis.',
-    };
-    return Promise.resolve(mockRes as unknown as T);
-  }
-
-  if (endpoint.includes('/api/tickets/commandes/') && method === 'POST') {
-    const isLightning = body.moyen_paiement === 'LIGHTNING';
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    const orderId = 'order-' + Math.random().toString(36).substring(2, 9);
-
-    const mockResponse: ApiCommandeResponse = {
-      order: {
-        id: orderId,
-        event_titre: 'Concert & Match IwacuTix',
-        tiers_lib: 'Tribune Standard',
-        quantite: body.quantite || 1,
-        montant_fbu: (30000 * (body.quantite || 1)).toFixed(2),
-        montant_sats: isLightning ? 132450 * (body.quantite || 1) : null,
-        moyen_paiement: body.moyen_paiement || 'LIGHTNING',
-        statut: 'PENDING',
-        expires_at: expiresAt,
-        date_creation: new Date().toISOString(),
-      },
-      paiement: {
-        type: 'lightning',
-        provider: 'blink',
-        paymentRequest: 'lnbc132450n1pj' + Math.random().toString(36).substring(2, 20),
-        paymentHash: 'hash-' + Math.random().toString(36).substring(2, 10),
-        satoshis: 132450 * (body.quantite || 1),
-        montant_sats: 132450 * (body.quantite || 1),
-        taux_fbu_vers_sats: '0.0044150',
-        expires_at: expiresAt,
-      },
-    };
-    return Promise.resolve(mockResponse as unknown as T);
-  }
-
-  // Validation scan billet
-  if (endpoint.includes('/api/tickets/valider/')) {
-    const qr = body.qr_code || '';
-    if (qr.includes('utilise')) {
-      const res: ApiScanResult = {
-        statut: 'REJETE',
-        error: 'Ce billet a déjà été utilisé à la porte.',
-        code: 'ticket_deja_scanne',
-      };
-      return Promise.resolve(res as unknown as T);
-    }
-    const res: ApiScanResult = {
-      statut: 'ACCEPTE',
-      ticket: {
-        id: 'BTK-' + Math.random().toString(36).substring(2, 6).toUpperCase(),
-        event_titre: 'Événement IwacuTix Officiel',
-        tiers_lib: 'Place Validée',
-        qr_code_hash: qr,
-        statut: 'VALIDE',
-        destinataire_nom: null,
-        destinataire_telephone: null,
-      },
-    };
-    return Promise.resolve(res as unknown as T);
-  }
-
-  return Promise.resolve({} as T);
+function mockFallback<T>(_endpoint: string, _options: RequestInit): Promise<T> {
+  throw {
+    error: 'Backend momentanément indisponible. Réessayez dans quelques secondes (démarrage Render).',
+    code: 'backend_indisponible',
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -483,9 +252,6 @@ export const api = {
 
     // 2.3 Statistiques de ventes de l'organisateur connecté
     getStats: () => request<OrganisateurStats>('/api/organisateurs/mon-profil/stats/'),
-
-    // Portefeuille organisateur (legacy compat)
-    getMonPortefeuille: () => request<PortefeuilleOrganisateur>('/api/organisateurs/mon-portefeuille/'),
 
     // 2.4 Liste des scanneurs assignés
     getScanneurs: (organisateurId: string, eventId?: string) =>
@@ -736,36 +502,6 @@ export const api = {
         }
       ),
 
-    // Versements (compatibilité)
-    getVersements: (params?: { statut?: string; canal?: string; organisateur?: string }) => {
-      const search = new URLSearchParams();
-      if (params?.statut) search.set('statut', params.statut);
-      if (params?.canal) search.set('canal', params.canal);
-      if (params?.organisateur) search.set('organisateur', params.organisateur);
-      const query = search.toString();
-      return request<PaginatedResponse<Versement>>(`/api/admin/versements/${query ? `?${query}` : ''}`);
-    },
   },
 
-  // 7. Paiements dev
-  paiements: {
-    simulerWebhookMobileMoney: async (
-      provider: 'lumicash' | 'ecocash' | 'bancobu' | 'ihela',
-      reference: string,
-      statut: 'SUCCESS' | 'ECHEC' = 'SUCCESS'
-    ) => {
-      const secret = `${provider.toUpperCase()}-dev-secret`;
-      const body = JSON.stringify({ reference, statut });
-      const signature = await computeHmacSha256Hex(secret, body);
-
-      return request<{ message?: string }>(`/api/paiements/webhooks/${provider}/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-IwacuTix-Signature': signature,
-        },
-        body,
-      });
-    },
-  },
 };

@@ -31,25 +31,38 @@ export const OrganizerKycPage: React.FC = () => {
   const [nomLegal, setNomLegal] = useState(user.name || '');
   const [structureName, setStructureName] = useState(user.organisateurProfile?.nom_structure || '');
   const [numeroCni, setNumeroCni] = useState('');
-  const [cniRectoUrl, setCniRectoUrl] = useState<string>('https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&auto=format&fit=crop&q=80');
-  const [cniVersoUrl, setCniVersoUrl] = useState<string>('https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80');
+  const [cniRectoUrl, setCniRectoUrl] = useState<string>('');
+  const [cniVersoUrl, setCniVersoUrl] = useState<string>('');
+  const [cniRectoFile, setCniRectoFile] = useState<File | null>(null);
+  const [cniVersoFile, setCniVersoFile] = useState<File | null>(null);
+
   
   // Email & OTP states
   const [email, setEmail] = useState(user.email || '');
   const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [emailOtpCode, setEmailOtpCode] = useState('');
+  const [generatedEmailCode, setGeneratedEmailCode] = useState('');
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sample quick load for smooth demo
-  const handleLoadDemoCni = () => {
-    setNomLegal(user.name || 'Dahl Ndayisenga');
-    setStructureName('Buja Horizon Events');
-    setNumeroCni('CNI-257-98140-BJM');
-    setCniRectoUrl('https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&auto=format&fit=crop&q=80');
-    setCniVersoUrl('https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80');
-    setEmail(user.email || 'dahlndayisenga0@gmail.com');
+
+  const handleCniRectoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCniRectoFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setCniRectoUrl(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleCniVersoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCniVersoFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setCniVersoUrl(reader.result as string);
+    reader.readAsDataURL(file);
   };
 
   const handleStep1Next = (e: React.FormEvent) => {
@@ -77,16 +90,17 @@ export const OrganizerKycPage: React.FC = () => {
     }
     setErrorMsg('');
     setEmailOtpSent(true);
-    setEmailOtpCode('4821'); // Simulated code
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    setGeneratedEmailCode(code);
   };
 
   const handleVerifyEmailOtp = () => {
-    if (emailOtpCode === '4821' || emailOtpCode.length === 4) {
+    if (emailOtpCode === generatedEmailCode && emailOtpCode.length === 4) {
       setIsEmailVerified(true);
       setErrorMsg('');
       setStep(3);
     } else {
-      setErrorMsg('Code OTP email invalide. (Astuce démo : 4821)');
+      setErrorMsg('Code OTP email invalide. (le code a été envoyé par email)');
     }
   };
 
@@ -108,12 +122,12 @@ export const OrganizerKycPage: React.FC = () => {
 
     // Soumission réelle d'une demande d'adhésion organisateur (multipart) côté backend
     try {
-      const rectoRes = await fetch(cniRectoUrl);
-      if (!rectoRes.ok) throw new Error('Image CNI illisible');
-      const rectoBlob = await rectoRes.blob();
-      const file = new File([rectoBlob], 'cni-recto.jpg', {
-        type: rectoBlob.type || 'image/jpeg',
-      });
+      const file = cniRectoFile;
+      if (!file) {
+        setErrorMsg('Veuillez sélectionner la photo de votre CNI avant de soumettre.');
+        setIsSubmitting(false);
+        return;
+      }
       const demande = await api.organisateurs.soumettreDemande({
         nom_entreprise: structureName.trim() || nomLegal.trim(),
         nom_structure: structureName.trim() || undefined,
@@ -150,14 +164,6 @@ export const OrganizerKycPage: React.FC = () => {
           <h1 className="text-sm font-display font-extrabold text-slate-900">Vérification Organisateur</h1>
           <p className="text-[10px] text-slate-500 font-mono">Conformité légale & Billetterie certifiée</p>
         </div>
-        <button
-          type="button"
-          onClick={handleLoadDemoCni}
-          className="text-[10px] font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-2 py-1 rounded-lg transition-colors cursor-pointer"
-          title="Pré-remplir automatiquement pour tester"
-        >
-          Démo CNI
-        </button>
       </div>
 
       <div className="p-4 sm:p-6 max-w-xl mx-auto w-full space-y-5 pb-12">
@@ -294,13 +300,13 @@ export const OrganizerKycPage: React.FC = () => {
                       <span className="text-[10px]">Photo du Recto</span>
                     </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setCniRectoUrl('https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&auto=format&fit=crop&q=80')}
-                    className="w-full py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 hover:bg-slate-100 transition-colors"
+                  <label
+                    className="w-full py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-1"
                   >
+                    <UploadCloud className="w-3 h-3 text-slate-500" />
                     Sélectionner la photo Recto
-                  </button>
+                    <input type="file" accept="image/*" onChange={handleCniRectoUpload} className="sr-only" />
+                  </label>
                 </div>
 
                 {/* Verso */}
@@ -322,13 +328,13 @@ export const OrganizerKycPage: React.FC = () => {
                       <span className="text-[10px]">Photo du Verso</span>
                     </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setCniVersoUrl('https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80')}
-                    className="w-full py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 hover:bg-slate-100 transition-colors"
+                  <label
+                    className="w-full py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-1"
                   >
+                    <UploadCloud className="w-3 h-3 text-slate-500" />
                     Sélectionner la photo Verso
-                  </button>
+                    <input type="file" accept="image/*" onChange={handleCniVersoUpload} className="sr-only" />
+                  </label>
                 </div>
               </div>
             </div>
@@ -387,7 +393,7 @@ export const OrganizerKycPage: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-orange-950">Code OTP reçu par Email</span>
                     <span className="text-[10px] font-mono text-orange-700 font-bold bg-white px-2 py-0.5 rounded border border-orange-200">
-                      Code démo : 4821
+                      Code OTP : {generatedEmailCode}
                     </span>
                   </div>
 
@@ -397,7 +403,7 @@ export const OrganizerKycPage: React.FC = () => {
                       maxLength={4}
                       value={emailOtpCode}
                       onChange={(e) => setEmailOtpCode(e.target.value)}
-                      placeholder="4821"
+                      placeholder="Code OTP"
                       className="flex-1 py-2.5 px-4 text-center font-mono font-bold tracking-widest text-lg rounded-xl border border-orange-300 bg-white focus:ring-2 focus:ring-brand-primary outline-none"
                     />
                     <button

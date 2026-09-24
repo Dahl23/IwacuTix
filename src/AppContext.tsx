@@ -15,18 +15,7 @@ import {
 import { api, API_BASE_URL, getStoredAccessToken } from './services/apiClient';
 import { apiEventToEvent, apiTicketToPurchased, apiUserToUser } from './services/apiMappers';
 import { 
-  MOCK_BUYER_USER, 
-  MOCK_ORGANIZER_USER, 
-  MOCK_SCANNER_USER, 
-  MOCK_ADMIN_USER,
-  MOCK_PURCHASED_TICKETS, 
   MOCK_EVENTS,
-  MOCK_SCANNER_ASSIGNMENTS,
-  MOCK_ORGANISATEUR_PORTEFEUILLE,
-  MOCK_PARAMETRE_PLATEFORME,
-  MOCK_VERSEMENTS,
-  MOCK_SCAN_LOGS,
-  MOCK_ORGANISATEURS_KYC,
   DEFAULT_ANONYMOUS_AVATAR,
   GUEST_USER
 } from './data';
@@ -48,6 +37,17 @@ export interface ScanResult {
   reason?: string;
 }
 
+export interface PlatformKycEntry {
+  id: string;
+  nom_structure: string;
+  responsable: string;
+  telephone: string;
+  email: string;
+  statut_verification: 'VERIFIE' | 'EN_ATTENTE' | 'REJETE';
+  commission_taux: number;
+  moyens: string[];
+}
+
 interface AppContextType {
   user: User;
   currentPersona: PersonaType;
@@ -66,16 +66,6 @@ interface AppContextType {
   updateCartQuantity: (eventId: string, categoryName: string, quantity: number) => void;
   removeFromCart: (eventId: string, categoryName: string) => void;
   clearCart: () => void;
-  checkout: (
-    paymentMethod: string, 
-    phone: string, 
-    giftDetails?: { 
-      isGift: boolean; 
-      recipientName?: string; 
-      recipientPhone?: string; 
-      recipientHasNoPhone?: boolean; 
-    }
-  ) => TicketPurchased[];
   addEvent: (newEvent: Event) => void;
   scanTicket: (ticketId: string) => void;
   scanTicketWithSecurity: (ticketCodeOrId: string, targetEventId: string) => ScanResult;
@@ -98,16 +88,12 @@ interface AppContextType {
   // SuperAdmin Platform parameters & KYC (Section 5 & 6.E)
   parametrePlateforme: ParametrePlateforme;
   updateParametrePlateforme: (delaiJours: number, commissionTaux: number) => void;
-  organisateursKyc: typeof MOCK_ORGANISATEURS_KYC;
+  organisateursKyc: PlatformKycEntry[];
   updateOrganisateurKyc: (id: string, statut: 'VERIFIE' | 'REJETE') => void;
   versements: Versement[];
 
   // Scan logs (Section 5 & 8)
   scanLogs: ScanLog[];
-
-  // OTP flow simulation
-  requestOtp: (phone: string) => string;
-  verifyOtp: (code: string) => boolean;
 
   // Profile update and user management
   setUser: React.Dispatch<React.SetStateAction<User>>;
@@ -354,34 +340,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [selectedCategory, setSelectedCategory] = useState('Tous');
 
   // Multi-tenant & staff states
-  const [scanneurAssignments, setScanneurAssignments] = useState<ScanneurAssignment[]>(MOCK_SCANNER_ASSIGNMENTS);
-  const [portefeuille, setPortefeuille] = useState<PortefeuilleOrganisateur>(MOCK_ORGANISATEUR_PORTEFEUILLE);
-  const [parametrePlateforme, setParametrePlateforme] = useState<ParametrePlateforme>(MOCK_PARAMETRE_PLATEFORME);
-  const [organisateursKyc, setOrganisateursKyc] = useState(MOCK_ORGANISATEURS_KYC);
-  const [versements, setVersements] = useState<Versement[]>(MOCK_VERSEMENTS);
-  const [scanLogs, setScanLogs] = useState<ScanLog[]>(MOCK_SCAN_LOGS);
+  const [scanneurAssignments, setScanneurAssignments] = useState<ScanneurAssignment[]>([]);
+  const [portefeuille] = useState<PortefeuilleOrganisateur>({
+    organisateur_id: '',
+    nom_structure: '',
+    solde_disponible_fbu: 0,
+    solde_disponible_sats: 0,
+    solde_total_genere_fbu: 0,
+    solde_total_genere_sats: 0,
+    derniere_maj: '-'
+  });
+  const [parametrePlateforme, setParametrePlateforme] = useState<ParametrePlateforme>({
+    delai_versement_jours: 7,
+    jour_execution_versement: 'DIMANCHE',
+    commission_taux_defaut: 5,
+    modifie_par: '-',
+    date_modification: '-'
+  });
+  const [organisateursKyc, setOrganisateursKyc] = useState<PlatformKycEntry[]>([]);
+  const [versements, setVersements] = useState<Versement[]>([]);
+  const [scanLogs, setScanLogs] = useState<ScanLog[]>([]);
 
-  const [notifications, setNotifications] = useState<AppNotification[]>([
-    {
-      id: 'notif-1',
-      title: 'FestiBuja Live Session approche ! ⏰',
-      body: 'L\'événement FestiBuja Live Session commence dans 2 jours au Boulevard de l\'Uprona. Préparez vos billets !',
-      date: 'Il y a 30 min',
-      type: 'approaching',
-      eventId: 'evt-festi-bujumbura-2026',
-      eventTitle: 'FestiBujumbura Live : Sat-B & Friends',
-      read: false,
-    },
-    {
-      id: 'notif-2',
-      title: 'Bienvenue sur IwacuTix Burundi ! 🎫',
-      body: 'La billetterie 100% digitale du Burundi. Payez via Lumicash, EcoCash, Bancobu ou Bitcoin Lightning (Blink).',
-      date: 'Hier',
-      type: 'system',
-      read: true,
-    }
-  ]);
-  const [followedEventIds, setFollowedEventIds] = useState<string[]>(['evt-vital-o-vs-le-messager']);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [followedEventIds, setFollowedEventIds] = useState<string[]>([]);
 
   // Switch demo persona with requirement to have verified buyer account before switching to organizer
   const switchPersona = (persona: PersonaType) => {
@@ -404,14 +385,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           user_id: prev.id,
           nom_structure: prev.name ? `${prev.name} Productions` : "Vital'O Football Club Burundi",
           numero_mobile_money_reception: prev.phone || '+257 79 100 200',
-          statut_verification: 'VERIFIE',
+          statut_verification: 'EN_ATTENTE',
           commission_taux: 5,
         }
       }));
     } else if (persona === 'SCANNEUR') {
-      setUser(MOCK_SCANNER_USER);
+      setUser((prev) => ({ ...prev }));
     } else if (persona === 'SUPERADMIN') {
-      setUser(MOCK_ADMIN_USER);
+      setUser((prev) => ({ ...prev }));
     }
   };
 
@@ -455,83 +436,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCart([]);
   };
 
-  const checkout = (
-    paymentMethod: string, 
-    phone: string,
-    giftDetails?: { 
-      isGift: boolean; 
-      recipientName?: string; 
-      recipientPhone?: string; 
-      recipientHasNoPhone?: boolean; 
-    }
-  ): TicketPurchased[] => {
-    const newPurchased: TicketPurchased[] = [];
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-
-    let totalFbuAdded = 0;
-    let totalSatsAdded = 0;
-    const isLightning = paymentMethod.toLowerCase().includes('blink') || paymentMethod.toLowerCase().includes('lightning');
-
-    cart.forEach((item) => {
-      const parentEvent = events.find(e => e.id === item.eventId);
-      for (let i = 0; i < item.quantity; i++) {
-        const randomSalt = Math.floor(1000 + Math.random() * 9000);
-        const ticketId = `ITX-${randomSalt}-${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${Math.floor(Math.random() * 10)}`;
-        // Simulated signed HMAC/JWT hash (Section 8 du cahier des charges)
-        const qrHash = `HMAC_SHA256.${btoa(`${ticketId}:${item.eventId}:VALID`)}.${Math.random().toString(36).substring(2, 10)}`;
-
-        newPurchased.push({
-          id: ticketId,
-          eventId: item.eventId,
-          eventTitle: item.eventTitle,
-          eventCategory: parentEvent?.category || 'sport',
-          eventDate: parentEvent?.date || 'Date de l\'événement',
-          eventTime: parentEvent?.time || '15:00',
-          eventLocation: parentEvent?.location || 'Bujumbura',
-          categoryName: item.categoryName,
-          price: item.price,
-          qrCodeValue: `IWACUTIX-SECURE-${ticketId}`,
-          qr_code_hash: qrHash,
-          purchaseDate: dateStr,
-          status: 'valide',
-          phoneUsed: phone,
-          paymentMethod: paymentMethod,
-          isGift: giftDetails?.isGift || false,
-          recipientName: giftDetails?.recipientName || '',
-          recipientPhone: giftDetails?.recipientPhone || '',
-          recipientHasNoPhone: giftDetails?.recipientHasNoPhone || false,
-        });
-
-        if (isLightning) {
-          // Approx 1 sat = ~3.2 FBu
-          totalSatsAdded += Math.round(item.price / 3.2);
-        } else {
-          totalFbuAdded += item.price;
-        }
-      }
-    });
-
-    // Update organizer wallet balance (Section 6.E)
-    if (totalFbuAdded > 0 || totalSatsAdded > 0) {
-      setPortefeuille((prev) => ({
-        ...prev,
-        solde_disponible_fbu: prev.solde_disponible_fbu + Math.round(totalFbuAdded * 0.95), // 5% commission retenue
-        solde_disponible_sats: prev.solde_disponible_sats + Math.round(totalSatsAdded * 0.95),
-        solde_total_genere_fbu: prev.solde_total_genere_fbu + totalFbuAdded,
-        solde_total_genere_sats: prev.solde_total_genere_sats + totalSatsAdded,
-        derniere_maj: 'À l\'instant'
-      }));
-    }
-
-    setTickets((prev) => [...newPurchased, ...prev]);
-    clearCart();
-    return newPurchased;
-  };
 
   const addEvent = (newEvent: Event) => {
     setEvents((prev) => [newEvent, ...prev]);
@@ -708,22 +612,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setOrganisateursKyc(prev => prev.map(org => org.id === id ? { ...org, statut_verification: statut } : org));
   };
 
-  const requestOtp = (phone: string) => {
-    return '1234'; // Simulated code
-  };
-
-  const verifyOtp = (code: string) => {
-    if (code === '1234' || code.length === 4) {
-      setUser(prev => ({
-        ...prev,
-        telephone_verifie: true,
-        statut_compte: 'ACTIF'
-      }));
-      return true;
-    }
-    return false;
-  };
-
   const submitOrganizerKyc = (kycData: {
     nomLegal: string;
     numeroCni: string;
@@ -743,10 +631,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         user_id: user.id,
         nom_structure: kycData.structureName || kycData.nomLegal,
         numero_mobile_money_reception: user.phone,
-        adresse_lightning_reception: `${kycData.nomLegal.toLowerCase().replace(/[^a-z0-9]/g, '')}@blink.sv`,
-        statut_verification: 'VERIFIE',
+        adresse_lightning_reception: user.organisateurProfile?.adresse_lightning_reception || '',
+        statut_verification: 'EN_ATTENTE',
         commission_taux: 5,
-        document_verification: `CNI-${kycData.numeroCni}`
       }
     };
     setUser(updatedUser);
@@ -760,9 +647,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         responsable: kycData.nomLegal,
         telephone: user.phone,
         email: kycData.email,
-        statut_verification: 'VERIFIE' as const,
+        statut_verification: 'EN_ATTENTE' as const,
         commission_taux: 5,
-        moyens: [`Mobile Money (${user.phone})`, `Blink Lightning`]
+        moyens: [`Mobile Money (${user.phone})`]
       },
       ...prev
     ]);
@@ -855,7 +742,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateCartQuantity,
         removeFromCart,
         clearCart,
-        checkout,
         addEvent,
         scanTicket,
         scanTicketWithSecurity,
@@ -876,8 +762,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateOrganisateurKyc,
         versements,
         scanLogs,
-        requestOtp,
-        verifyOtp,
         submitOrganizerKyc,
         themeMode,
         isDarkMode,

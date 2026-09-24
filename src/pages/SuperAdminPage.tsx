@@ -168,9 +168,9 @@ export const SuperAdminPage: React.FC = () => {
               {totalVolumeFbu.toLocaleString('fr-FR')} FBu
             </div>
             <span className="text-[10px] text-emerald-600 font-semibold block">
-              {apiStats
-                ? `${apiStats.nb_billets_vendus} billets • ${apiStats.total_sats.toLocaleString('fr-FR')} Sats ⚡`
-                : '+145 200 Sats Lightning ⚡'}
+      {apiStats
+                  ? `${apiStats.nb_billets_vendus} billets • ${apiStats.total_sats.toLocaleString('fr-FR')} Sats ⚡`
+                  : 'En attente de synchronisation'}
             </span>
           </div>
 
@@ -186,7 +186,7 @@ export const SuperAdminPage: React.FC = () => {
             <span className="text-[10px] text-slate-500 block">
               {apiStats
                 ? `${apiStats.total_net_organisateur_sats.toLocaleString('fr-FR')} Sats nets organisateurs`
-                : 'Prélevées à la source'}
+                : 'En attente de synchronisation'}
             </span>
           </div>
         </div>
