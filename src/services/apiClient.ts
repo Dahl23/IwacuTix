@@ -266,10 +266,11 @@ export const api = {
         body: JSON.stringify(payload),
       }),
 
-    // 2.4 Retirer un scanneur
-    retirerScanneur: (organisateurId: string, assignmentId: string) =>
-      request<void>(`/api/organisateurs/${organisateurId}/scanneurs/${assignmentId}/`, {
-        method: 'DELETE',
+    // 2.4 Désactiver un scanneur (désactivation, pas suppression)
+    desactiverScanneur: (organisateurId: string, assignmentId: string) =>
+      request<ScanneurAssignment>(`/api/organisateurs/${organisateurId}/scanneurs/${assignmentId}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({ actif: false }),
       }),
 
     // 2.5 Soumettre une demande d'adhésion organisateur

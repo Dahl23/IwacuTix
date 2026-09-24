@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { api } from '../services/apiClient';
+import jsQR from 'jsqr';
 import { 
   ChevronLeft, 
   QrCode, 
@@ -12,9 +13,9 @@ import {
   History, 
   UserCheck, 
   Search, 
-  HelpCircle,
-  Sparkles,
-  Ticket
+  Zap,
+  Camera,
+  CameraOff
 } from 'lucide-react';
 
 export const ScannerPage: React.FC = () => {
@@ -30,6 +31,12 @@ export const ScannerPage: React.FC = () => {
   } = useApp();
 
   const [scanning, setScanning] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number>(0);
   const [apiScanLogs, setApiScanLogs] = useState<{
     id: string;
     ticket_id: string;
@@ -81,14 +88,17 @@ export const ScannerPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [selectedEventId]);
 
+  const scanningRef = useRef(false);
+
   const handleScan = async (codeToScan?: string) => {
-    const code = codeToScan || inputCode;
-    if (!code.trim() || scanning) return;
+    const code = (codeToScan || inputCode).trim();
+    if (!code || scanning) return;
 
     setScanning(true);
+    scanningRef.current = true;
     try {
       // Validation côté backend : POST /api/tickets/valider/ { qr_code }
-      const res = await api.tickets.valider(code.trim());
+      const res = await api.tickets.valider(code);
       if (res.statut === 'ACCEPTE') {
         setLastScanResult({
           success: true,
@@ -118,7 +128,7 @@ export const ScannerPage: React.FC = () => {
     } catch (err: any) {
       if (err instanceof TypeError) {
         // Backend injoignable → repli sur la validation locale (mode hors-ligne)
-        const local = scanTicketWithSecurity(code.trim(), selectedEventId);
+        const local = scanTicketWithSecurity(code, selectedEventId);
         setLastScanResult(local);
       } else {
         setLastScanResult({
@@ -133,20 +143,71 @@ export const ScannerPage: React.FC = () => {
       }
     } finally {
       setScanning(false);
+      scanningRef.current = false;
       if (!codeToScan) setInputCode('');
     }
   };
 
-  // Test ticket helpers
-  const validPelouseTicket = tickets.find(
-    (t) => t.eventId === selectedEventId && t.status === 'valide'
-  );
-  const usedTicket = tickets.find(
-    (t) => t.eventId === selectedEventId && t.status === 'utilise'
-  );
-  const otherEventTicket = tickets.find(
-    (t) => t.eventId !== selectedEventId
-  );
+  // ---- Scanner caméra réel (PWA mobile) ----
+  const stopCamera = useCallback(() => {
+    cancelAnimationFrame(rafRef.current);
+    const stream = streamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+    setCameraError('');
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    setCameraError('');
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Caméra non disponible sur cet appareil. Utilisez la saisie manuelle du code.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+      streamRef.current = stream;
+      setCameraActive(true);
+      requestAnimationFrame(tick);
+    } catch {
+      setCameraError('Accès caméra refusé sur le mobile. Saisissez le code manuellement ci-dessous.');
+    }
+  }, []);
+
+  const tick = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.readyState < 2 || scanningRef.current) {
+      rafRef.current = requestAnimationFrame(tick);
+      return;
+    }
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) {
+      rafRef.current = requestAnimationFrame(tick);
+      return;
+    }
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+    if (code && code.data) {
+      if (!scanningRef.current) {
+        handleScan(code.data);
+      }
+    }
+    rafRef.current = requestAnimationFrame(tick);
+  };
+
+  useEffect(() => {
+    startCamera();
+    return () => stopCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col bg-[#F8FAFC]">
@@ -238,15 +299,73 @@ export const ScannerPage: React.FC = () => {
             </span>
           </div>
 
-          {/* Scanner Simulation Target Box */}
-          <div className="relative aspect-video rounded-xl bg-slate-950 border-2 border-dashed border-slate-700 flex flex-col items-center justify-center p-3 text-center overflow-hidden">
-            <div className="w-24 h-24 border-2 border-brand-primary/60 rounded-lg flex items-center justify-center relative">
-              <div className="absolute inset-0 bg-brand-primary/10 animate-pulse rounded-lg" />
-              <QrCode className="w-12 h-12 text-slate-500" />
-            </div>
-            <p className="text-[10px] text-slate-400 mt-2 font-mono">
-              Visez le QR code du billet ou saisissez son identifiant
-            </p>
+          {/* Scanner Viewport - Caméra réelle */}
+          <div className="relative aspect-square sm:aspect-video rounded-xl bg-slate-950 border-2 border-slate-700 overflow-hidden">
+            {cameraActive ? (
+              <>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                {/* Viseur scanner (coins + ligne) */}
+                <div className="absolute inset-0 pointer-events-none">
+                  <div className="absolute top-3 left-3 w-16 h-16 border-t-4 border-l-4 border-brand-primary rounded-tl-xl" />
+                  <div className="absolute top-3 right-3 w-16 h-16 border-t-4 border-r-4 border-brand-primary rounded-tr-xl" />
+                  <div className="absolute bottom-3 left-3 w-16 h-16 border-b-4 border-l-4 border-brand-primary rounded-bl-xl" />
+                  <div className="absolute bottom-3 right-3 w-16 h-16 border-b-4 border-r-4 border-brand-primary rounded-br-xl" />
+                  <div className="absolute left-6 right-6 h-0.5 bg-brand-primary/80 rounded-full animate-scanline pointer-events-none" />
+                </div>
+                {scanning && (
+                  <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2">
+                    <div className="w-10 h-10 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs font-mono text-white">Vérification du billet…</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center p-4">
+                <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center">
+                  {cameraError ? (
+                    <CameraOff className="w-8 h-8 text-slate-500" />
+                  ) : (
+                    <QrCode className="w-8 h-8 text-slate-500" />
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-white">
+                    {cameraError ? 'Caméra indisponible' : 'Caméra désactivée'}
+                  </p>
+                  <p className="text-[10px] text-slate-400 max-w-[220px] leading-snug">
+                    {cameraError || 'Le scan par caméra est réservé au mobile (PWA). Saisissez le code manuellement ci-dessous.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => void startCamera()}
+                  className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-primary/90 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  <Camera className="w-4 h-4" />
+                  Activer la caméra
+                </button>
+              </div>
+            )}
+          </div>
+          <canvas ref={canvasRef} className="hidden" />
+          <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+            <span className="flex items-center gap-1">
+              <Zap className="w-3 h-3 text-brand-primary" />
+              Réservé au contrôle d'accès mobile (caméra)
+            </span>
+            {cameraActive && (
+              <button
+                onClick={stopCamera}
+                className="text-slate-400 hover:text-white text-[10px] font-mono underline cursor-pointer"
+              >
+                Arrêter la caméra
+              </button>
+            )}
           </div>
 
           {/* Manual Code Input Bar */}
@@ -316,76 +435,6 @@ export const ScannerPage: React.FC = () => {
             </div>
           </div>
         )}
-
-        {/* Quick Testing Presets according to specs */}
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-amber-500" />
-              Boutons de test rapide (Simulation)
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-left text-xs">
-            {validPelouseTicket && (
-              <button
-                onClick={() => handleScan(validPelouseTicket.id)}
-                className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-900 text-left transition-colors"
-              >
-                <div className="font-semibold flex items-center justify-between">
-                  <span>1. Billet Valide (Pelouse)</span>
-                  <span className="text-[9px] font-mono text-emerald-700">Test ✅</span>
-                </div>
-                <div className="text-[10px] text-emerald-700 font-mono mt-0.5">
-                  ID: {validPelouseTicket.id}
-                </div>
-              </button>
-            )}
-
-            {usedTicket && (
-              <button
-                onClick={() => handleScan(usedTicket.id)}
-                className="p-2 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 text-red-900 text-left transition-colors"
-              >
-                <div className="font-semibold flex items-center justify-between">
-                  <span>2. Billet Déjà Utilisé</span>
-                  <span className="text-[9px] font-mono text-red-700">Fraude ❌</span>
-                </div>
-                <div className="text-[10px] text-red-700 font-mono mt-0.5">
-                  ID: {usedTicket.id} (Doit être rejeté)
-                </div>
-              </button>
-            )}
-
-            {otherEventTicket && (
-              <button
-                onClick={() => handleScan(otherEventTicket.id)}
-                className="p-2 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-left transition-colors"
-              >
-                <div className="font-semibold flex items-center justify-between">
-                  <span>3. Billet d'un Autre Événement</span>
-                  <span className="text-[9px] font-mono text-amber-700">Refus ⛔</span>
-                </div>
-                <div className="text-[10px] text-amber-700 font-mono mt-0.5">
-                  {otherEventTicket.eventTitle.slice(0, 24)}...
-                </div>
-              </button>
-            )}
-
-            <button
-              onClick={() => handleScan('FAUX-CODE-INCONNU')}
-              className="p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 text-left transition-colors"
-            >
-              <div className="font-semibold flex items-center justify-between">
-                <span>4. Code Falsifié / Inexistant</span>
-                <span className="text-[9px] font-mono text-slate-500">Invalide ⚠️</span>
-              </div>
-              <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                FAUX-CODE-INCONNU
-              </div>
-            </button>
-          </div>
-        </div>
 
         {/* Scan Log History Table (Section 5) */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">

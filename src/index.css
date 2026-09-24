@@ -125,3 +125,20 @@ body {
 .animate-backdrop-fade {
   animation: backdropFadeIn 0.2s ease-out forwards;
 }
+
+/* Ligne de scan animée du lecteur QR (ScannerPage) */
+@keyframes scanlineMove {
+  0% {
+    top: 8%;
+  }
+  50% {
+    top: 88%;
+  }
+  100% {
+    top: 8%;
+  }
+}
+
+.animate-scanline {
+  animation: scanlineMove 2.4s ease-in-out infinite;
+}

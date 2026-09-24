@@ -145,13 +145,9 @@ export const HomePage: React.FC = () => {
                   <span>Créer un événement</span>
                 </button>
               </div>
-            ) : (
+            ) : isUserVerified ? (
               <button
                 onClick={() => {
-                  if (!isUserVerified) {
-                    openAuthModal("Pour créer des événements et devenir organisateur, vous devez d'abord vous connecter avec votre compte acheteur.");
-                    return;
-                  }
                   navigate('/organisateur/verification');
                 }}
                 className="px-5 py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/25 flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
@@ -160,7 +156,7 @@ export const HomePage: React.FC = () => {
                 <span>Créer un événement (Vérifier CNI)</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </section>

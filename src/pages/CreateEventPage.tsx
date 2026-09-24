@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { Event, TicketCategory } from '../types';
 import { api } from '../services/apiClient';
-import { ChevronLeft, Calendar as CalendarIcon, MapPin, Sparkles, Plus, Trash2, Tag, Layers, CheckCircle, ShieldAlert } from 'lucide-react';
+import { ChevronLeft, Calendar as CalendarIcon, MapPin, Sparkles, Plus, Trash2, Tag, Layers, CheckCircle, ShieldAlert, Upload } from 'lucide-react';
 
 const PRESET_IMAGES = [
   {
@@ -52,7 +52,13 @@ export const CreateEventPage: React.FC = () => {
   const [time, setTime] = useState('18:00');
   const [selectedImage, setSelectedImage] = useState(PRESET_IMAGES[0].url);
   const [customImageUrl, setCustomImageUrl] = useState('');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<string>('');
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const [organisateur, setOrganisateur] = useState(user.name);
+
+  // Stock fonctionnel : {categorieIndex, "COMPLET" si stock épuisé} pour le sold-out
+  const [soldOutTiers, setSoldOutTiers] = useState<Record<string, boolean>>({});
 
   // Ticket Categories list state
   const [ticketCategories, setTicketCategories] = useState<TicketCategory[]>([
@@ -99,6 +105,36 @@ export const CreateEventPage: React.FC = () => {
     setTicketCategories(ticketCategories.filter((_, idx) => idx !== index));
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const isVideo = file.type.startsWith('video/');
+    const isImage = file.type.startsWith('image/');
+    if (!isVideo && !isImage) {
+      setUploadFile(null);
+      setUploadPreview('');
+      alert('Veuillez choisir une photo (JPG/PNG/WebP) ou une vidéo (MP4/WebM).');
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      setUploadFile(null);
+      setUploadPreview('');
+      alert('Fichier trop volumineux (max 50 Mo).');
+      return;
+    }
+    setUploadFile(file);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setUploadPreview(String(reader.result));
+      setSelectedImage('');
+      setCustomImageUrl('');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const detectMediaType = (file: File): 'IMAGE' | 'VIDEO' =>
+    file.type.startsWith('video/') ? 'VIDEO' : 'IMAGE';
+
   const CATEGORY_TO_API: Record<string, string> = {
     sport: 'SPORT',
     musique: 'CONCERT',
@@ -123,7 +159,9 @@ export const CreateEventPage: React.FC = () => {
     }
 
     const eventId = `evt-custom-${Date.now()}`;
-    const finalImage = customImageUrl.trim() ? customImageUrl.trim() : selectedImage;
+    const finalImage = uploadFile
+      ? uploadPreview
+      : (customImageUrl.trim() ? customImageUrl.trim() : selectedImage);
 
     const formattedDate = new Date(date).toLocaleDateString('fr-FR', {
       weekday: 'long',
@@ -177,9 +215,23 @@ export const CreateEventPage: React.FC = () => {
         });
       }
 
-      try {
-        await api.events.addMedia(createdId, { type_media: 'IMAGE', url_externe: finalImage });
-      } catch {}
+      // Upload réel photo/vidéo si fichier sélectionné, sinon URL/preset
+      if (uploadFile) {
+        try {
+          setUploadingMedia(true);
+          const fd = new FormData();
+          fd.append('type_media', detectMediaType(uploadFile));
+          fd.append('fichier', uploadFile);
+          await api.events.addMedia(createdId, fd);
+        } catch {}
+        finally {
+          setUploadingMedia(false);
+        }
+      } else {
+        try {
+          await api.events.addMedia(createdId, { type_media: 'IMAGE', url_externe: finalImage });
+        } catch {}
+      }
 
       try {
         await api.events.updateEvent(createdId, { statut: 'PUBLIE' });
@@ -368,6 +420,7 @@ export const CreateEventPage: React.FC = () => {
                 type="date"
                 required
                 value={date}
+                min={new Date().toISOString().split('T')[0]}
                 onChange={(e) => setDate(e.target.value)}
                 className="w-full bg-white border border-slate-200 rounded-xl px-3 py-3 text-slate-800 font-bold text-xs focus:outline-none focus:border-brand-primary transition-all shadow-sm"
               />
@@ -410,46 +463,109 @@ export const CreateEventPage: React.FC = () => {
           </h3>
 
           <p className="text-[10px] text-slate-500 leading-normal">
-            Sélectionnez une image de couverture de haute qualité parmi nos presets ou saisissez l'URL d'une image personnalisée :
+             Ajoutez une <strong className="text-slate-700">photo</strong> ou une <strong className="text-slate-700">vidéo</strong> de votre événement (upload réel), ou choisissez une image parmi nos presets.
           </p>
 
-          {/* Presets Horizontal Slider */}
-          <div className="flex gap-3 overflow-x-auto pb-2 snap-x scrollbar-hide">
-            {PRESET_IMAGES.map((img, idx) => (
+          {/* Upload fichier réel (photo/vidéo) */}
+          <label className="block cursor-pointer">
+            <input
+              type="file"
+              accept="image/*,video/mp4,video/webm"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <div className="p-4 rounded-2xl border-2 border-dashed border-brand-primary/40 bg-orange-50/50 hover:bg-orange-50 transition-colors flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-brand-primary/10 border border-brand-primary/30 text-brand-primary flex items-center justify-center shrink-0">
+                <Upload className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-slate-800">
+                  {uploadFile ? uploadFile.name : 'Téléverser une photo ou vidéo'}
+                </p>
+                <p className="text-[10px] text-slate-500">
+                  {uploadFile
+                    ? `${(uploadFile.size / 1024 / 1024).toFixed(1)} Mo • ${uploadFile.type.split('/')[0]}`
+                    : 'JPG, PNG, WebP • MP4, WebM max 50 Mo'}
+                </p>
+              </div>
+              {uploadFile && (
+                <span className="text-[10px] font-mono px-2 py-1 rounded-lg bg-emerald-100 text-emerald-800 font-bold shrink-0">
+                  {detectMediaType(uploadFile).toLowerCase() === 'video' ? '🎬 Vidéo' : '🖼️ Photo'}
+                </span>
+              )}
+            </div>
+          </label>
+
+          {uploadPreview && (
+            <div className="rounded-xl overflow-hidden border border-slate-200 relative">
+              {uploadFile && uploadFile.type.startsWith('video/') ? (
+                <video src={uploadPreview} controls className="w-full max-h-56 object-cover" />
+              ) : (
+                <img src={uploadPreview} alt="Aperçu de l'événement" className="w-full max-h-56 object-cover" />
+              )}
               <button
                 type="button"
-                key={idx}
                 onClick={() => {
-                  setSelectedImage(img.url);
-                  setCustomImageUrl('');
+                  setUploadFile(null);
+                  setUploadPreview('');
+                  setSelectedImage(PRESET_IMAGES[0].url);
                 }}
-                className={`snap-center shrink-0 w-28 rounded-xl overflow-hidden border-2 relative transition-all cursor-pointer ${
-                  selectedImage === img.url && !customImageUrl
-                    ? 'border-brand-primary scale-95 shadow-md shadow-brand-primary/10'
-                    : 'border-slate-200'
-                }`}
+                className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 text-white text-[10px] font-bold hover:bg-black/80 cursor-pointer"
               >
-                <img referrerPolicy="no-referrer" src={img.url} alt={img.name} className="w-full h-16 object-cover" />
-                <div className="p-1 bg-white/95 text-[8px] font-bold text-slate-700 truncate">{img.name}</div>
+                Retirer
               </button>
-            ))}
-          </div>
+            </div>
+          )}
+
+          {!uploadFile && (
+            <>
+              <p className="text-[10px] text-slate-500 leading-normal mt-1">
+                ou sélectionnez une image de couverture parmi nos presets :
+              </p>
+
+              {/* Presets Horizontal Slider */}
+              <div className="flex gap-3 overflow-x-auto pb-2 snap-x scrollbar-hide">
+                {PRESET_IMAGES.map((img, idx) => (
+                  <button
+                    type="button"
+                    key={idx}
+                    onClick={() => {
+                      setSelectedImage(img.url);
+                      setCustomImageUrl('');
+                      setUploadFile(null);
+                      setUploadPreview('');
+                    }}
+                    className={`snap-center shrink-0 w-28 rounded-xl overflow-hidden border-2 relative transition-all cursor-pointer ${
+                      selectedImage === img.url && !customImageUrl
+                        ? 'border-brand-primary scale-95 shadow-md shadow-brand-primary/10'
+                        : 'border-slate-200'
+                    }`}
+                  >
+                    <img referrerPolicy="no-referrer" src={img.url} alt={img.name} className="w-full h-16 object-cover" />
+                    <div className="p-1 bg-white/95 text-[8px] font-bold text-slate-700 truncate">{img.name}</div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           {/* Custom URL Option */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider block">
-              Saisir une URL d'image personnalisée (Optionnel)
-            </label>
-            <input
-              type="url"
-              value={customImageUrl}
-              onChange={(e) => {
-                setCustomImageUrl(e.target.value);
-              }}
-              placeholder="Ex: https://images.unsplash.com/votre-photo..."
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-normal text-xs focus:outline-none focus:border-brand-primary transition-all shadow-sm"
-            />
-          </div>
+          {!uploadFile && (
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider block">
+                Saisir une URL d'image personnalisée (Optionnel)
+              </label>
+              <input
+                type="url"
+                value={customImageUrl}
+                onChange={(e) => {
+                  setCustomImageUrl(e.target.value);
+                }}
+                placeholder="Ex: https://images.unsplash.com/votre-photo..."
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-normal text-xs focus:outline-none focus:border-brand-primary transition-all shadow-sm"
+              />
+            </div>
+          )}
         </div>
 
         {/* Section 4: Catégories de tickets */}
@@ -458,6 +574,10 @@ export const CreateEventPage: React.FC = () => {
             <Plus className="w-4 h-4 text-brand-primary" />
             4. Catégories de billets
           </h3>
+
+          <p className="text-[10px] text-slate-500 leading-normal">
+            Définissez chaque tarif et sa <strong className="text-slate-700">capacité maximale</strong> (nombre de tickets disponibles). Dès que tous les tickets d'un tarif sont vendus, il passe automatiquement en <strong className="text-red-600">COMPLET (sold-out)</strong>.
+          </p>
 
           <div className="space-y-3">
             {ticketCategories.map((cat, idx) => (
@@ -518,8 +638,9 @@ export const CreateEventPage: React.FC = () => {
               />
               <input
                 type="number"
-                placeholder="Tickets dispos (ex: 200)"
+                placeholder="Capacité max (ex: 200)"
                 value={newCatAvailable}
+                min={1}
                 onChange={(e) => setNewCatAvailable(e.target.value)}
                 className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none col-span-1 font-mono"
               />

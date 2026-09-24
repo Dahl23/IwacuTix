@@ -18,11 +18,13 @@ import {
   AlertCircle,
   Clock,
   MapPin,
-  Trash2,
+  Power,
+  RotateCcw,
   ChevronRight,
   Sparkles,
   BarChart3,
-  Search
+  Search,
+  UserPlus
 } from 'lucide-react';
 
 export const OrganizerHubPage: React.FC = () => {
@@ -33,7 +35,6 @@ export const OrganizerHubPage: React.FC = () => {
     tickets, 
     scanneurAssignments, 
     assignScanneur, 
-    removeScanneurAssignment,
     isUserVerified,
     openAuthModal
   } = useApp();
@@ -94,7 +95,7 @@ export const OrganizerHubPage: React.FC = () => {
         setMonProfilId(prof.id);
         try {
           const scans = await api.organisateurs.getScanneurs(prof.id);
-          if (scans && scans.results) setApiScanners(scans.results.filter((s) => s.actif !== false));
+          if (scans && scans.results) setApiScanners(scans.results);
         } catch {}
       } catch {}
       try {
@@ -130,6 +131,7 @@ export const OrganizerHubPage: React.FC = () => {
   // 3. Filter scanner assignments attached to my events only
   const myScanners = apiScanners !== null ? apiScanners : scanneurAssignments.filter(a => myEventIds.has(a.event_id));
   const displayScanners = apiScanners !== null ? apiScanners : myScanners;
+  const activeScannersCount = displayScanners.filter((a) => a.actif !== false).length;
 
   // 4. Compute statistics attached strictly to the organizer's events
   const totalRevenueFbu = myTickets.reduce((acc, t) => acc + t.price, 0);
@@ -175,15 +177,26 @@ export const OrganizerHubPage: React.FC = () => {
     setTimeout(() => setScannerSuccessMsg(''), 4000);
   };
 
-  const handleRemoveScanner = async (assignmentId: string) => {
+  const handleToggleScanner = async (assignmentId: string, deactiver: boolean) => {
     if (monProfilId) {
       try {
-        await api.organisateurs.retirerScanneur(monProfilId, assignmentId);
-        setApiScanners((prev) => (prev ? prev.filter((a) => a.id !== assignmentId) : prev));
+        if (deactiver) {
+          await api.organisateurs.desactiverScanneur(monProfilId, assignmentId);
+        }
+        const scans = await api.organisateurs.getScanneurs(monProfilId);
+        if (scans && scans.results) setApiScanners(scans.results);
         return;
       } catch {}
     }
-    removeScanneurAssignment(assignmentId);
+    // Repli local (backend indisponible) : basculer l'état actif côté contexte
+    const target = displayScanners.find((a) => a.id === assignmentId);
+    if (target) {
+      const updated = displayScanners.map((a) =>
+        a.id === assignmentId ? { ...a, actif: deactiver ? false : true } : a
+      );
+      setApiScanners(updated);
+      assignScanneur(target.user_nom, target.user_telephone.replace(/^\+257\s*/, ''), target.event_id);
+    }
   };
 
   const formatPrice = (price: number) => {
@@ -322,7 +335,7 @@ export const OrganizerHubPage: React.FC = () => {
               <QrCode className="w-4 h-4 text-purple-600" />
             </div>
             <div className="text-xl font-display font-extrabold text-slate-900">
-              {displayScanners.length}
+              {activeScannersCount}
             </div>
             <p className="text-[10px] text-slate-400">Contrôle des entrées</p>
           </div>
@@ -357,6 +370,55 @@ export const OrganizerHubPage: React.FC = () => {
         {/* TAB 1: EVENTS & STATISTICS */}
         {activeTab === 'events' && (
           <div className="space-y-4">
+            {/* Détail des billets vendus par tarif (API stats organisateur) */}
+            {orgStats && orgStats.par_tier && orgStats.par_tier.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-blue-600" />
+                    Billets vendus — détail par tarif
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">{orgStats.nb_billets_vendus} billet(s)</span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {orgStats.par_tier.map((row, i) => (
+                    <div key={i} className="px-4 py-2.5 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-800 truncate">{row.tier__nom}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{row.event__titre}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-mono font-bold text-emerald-600">{row.nb_ventes} vendu(s)</p>
+                        {row.total_sats > 0 && (
+                          <p className="text-[10px] font-mono text-slate-400">{row.total_sats.toLocaleString('fr-FR')} Sats</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Récap ventes par événement */}
+            {orgStats && orgStats.par_evenement && orgStats.par_evenement.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <BarChart3 className="w-3.5 h-3.5 text-brand-primary" />
+                    Billets vendus — détail par événement
+                  </span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {orgStats.par_evenement.map((row, i) => (
+                    <div key={i} className="px-4 py-2.5 flex items-center justify-between gap-3">
+                      <p className="text-xs font-bold text-slate-800 truncate">{row.event__titre}</p>
+                      <p className="text-xs font-mono font-bold text-emerald-600 shrink-0">{row.nb_ventes} vendu(s)</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {myEvents.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center space-y-3">
                 <div className="w-12 h-12 rounded-2xl bg-orange-50 text-brand-primary flex items-center justify-center mx-auto">
@@ -478,10 +540,10 @@ export const OrganizerHubPage: React.FC = () => {
                   </span>
                 </div>
                 <h3 className="text-sm sm:text-base font-display font-extrabold text-slate-900">
-                  Créer et habiliter un Scanneur de billets
+                  Habiliter un Scanneur de billets (compte existant)
                 </h3>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  L'agent scanneur pourra scanner et valider les billets QR code à la porte le jour de votre événement via l'application IwacuTix.
+                  Le scanneur doit <strong className="text-slate-700">déjà posséder un compte IwacuTix</strong> (acheteur). Saisissez son numéro de téléphone enregistré : il se connectera avec son compte pour scanner vos billets QR code le jour J.
                 </p>
               </div>
 
@@ -520,13 +582,13 @@ export const OrganizerHubPage: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Nom de l'agent scanneur <span className="text-red-500">*</span>
+                    Nom du compte <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={scannerNom}
                     onChange={(e) => setScannerNom(e.target.value)}
-                    placeholder="Ex: Alain Niyonzima (Porte A)"
+                    placeholder="Rechercher par nom"
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-brand-primary outline-none"
                     required
                   />
@@ -534,7 +596,7 @@ export const OrganizerHubPage: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Téléphone de l'agent <span className="text-red-500">*</span>
+                    Téléphone du compte existant <span className="text-red-500">*</span>
                   </label>
                   <div className="flex gap-2">
                     <input
@@ -547,8 +609,9 @@ export const OrganizerHubPage: React.FC = () => {
                     />
                     <button
                       type="submit"
-                      className="px-4 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs shrink-0 cursor-pointer active:scale-95 transition-all"
+                      className="px-4 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs shrink-0 cursor-pointer active:scale-95 transition-all flex items-center gap-1"
                     >
+                      <UserPlus className="w-3.5 h-3.5" />
                       Habiliter
                     </button>
                   </div>
@@ -574,25 +637,35 @@ export const OrganizerHubPage: React.FC = () => {
 
               {displayScanners.length === 0 ? (
                 <div className="p-6 rounded-xl bg-slate-50 border border-slate-100 text-center text-xs text-slate-500">
-                  Aucun scanneur n'est encore assigné à vos événements. Utilisez le formulaire ci-dessus pour en ajouter un.
+                  Aucun scanneur n'est encore habilité sur vos événements. Utilisez le formulaire ci-dessus pour habiliter un compte existant.
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden">
                   {displayScanners.map((scanner) => (
                     <div
                       key={scanner.id}
-                      className="p-3.5 bg-white hover:bg-slate-50 transition-colors flex items-center justify-between gap-3"
+                      className={`p-3.5 bg-white hover:bg-slate-50 transition-colors flex items-center justify-between gap-3 ${
+                        scanner.actif === false ? 'opacity-60' : ''
+                      }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs shrink-0">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                          scanner.actif === false ? 'bg-slate-200 text-slate-500' : 'bg-purple-100 text-purple-700'
+                        }`}>
                           <QrCode className="w-4 h-4" />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-slate-900">{scanner.user_nom}</span>
-                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
-                              Actif
-                            </span>
+                            {scanner.actif === false ? (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold">
+                                Désactivé
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
+                                Actif
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-slate-500 flex items-center gap-2">
                             <span>📞 {scanner.user_telephone}</span>
@@ -602,13 +675,23 @@ export const OrganizerHubPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => void handleRemoveScanner(scanner.id)}
-                        className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
-                        title="Révoquer l'accès scanneur"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {scanner.actif === false ? (
+                        <button
+                          onClick={() => void handleToggleScanner(scanner.id, false)}
+                          className="p-2 text-slate-500 hover:text-emerald-600 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
+                          title="Réactiver l'accès scanneur"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => void handleToggleScanner(scanner.id, true)}
+                          className="p-2 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-colors cursor-pointer"
+                          title="Désactiver l'accès scanneur (conservé pour cet événement)"
+                        >
+                          <Power className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

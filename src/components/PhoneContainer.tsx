@@ -274,16 +274,12 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                           <span>Créer un événement</span>
                         </Link>
                       </div>
-                    ) : (
+                    ) : isUserVerified ? (
                       <div className="pt-1.5 pb-1 border-t border-slate-100 my-1">
                         <button
                           onClick={() => {
                             setProfileMenuOpen(false);
-                            if (!isUserVerified) {
-                              openAuthModal('ORGANISATEUR');
-                            } else {
-                              switchPersona('ORGANISATEUR');
-                            }
+                            switchPersona('ORGANISATEUR');
                           }}
                           className="w-full flex items-center justify-between p-2.5 rounded-xl bg-orange-50/80 hover:bg-orange-100 text-orange-900 font-bold transition-colors cursor-pointer text-left"
                         >
@@ -294,7 +290,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                           <ArrowRight className="w-3.5 h-3.5 text-brand-primary" />
                         </button>
                       </div>
-                    )}
+                    ) : null}
 
                     {/* Appearance & Theme Selector */}
                     <div className="py-2 px-1 border-t border-slate-100 dark:border-slate-800 my-1">
@@ -453,13 +449,9 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                   <PlusCircle className="w-3.5 h-3.5" />
                   <span>Publier un Événement</span>
                 </Link>
-              ) : (
+              ) : isUserVerified ? (
                 <button
                   onClick={() => {
-                    if (!isUserVerified) {
-                      openAuthModal("Pour devenir organisateur ou accéder à l'espace organisateur, vous devez d'abord vous connecter avec votre compte acheteur.");
-                      return;
-                    }
                     switchPersona('ORGANISATEUR');
                   }}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-orange-300 hover:text-white border border-slate-700 font-bold text-[11px] transition-all cursor-pointer"
@@ -467,7 +459,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                   <Sparkles className="w-3.5 h-3.5 text-brand-primary" />
                   <span>Devenir Organisateur</span>
                 </button>
-              )}
+              ) : null}
             </div>
 
           </div>
