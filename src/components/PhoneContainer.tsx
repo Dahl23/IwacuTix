@@ -69,7 +69,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
   }, [path]);
 
   // Screens that do not need header or footer (standalone/onboarding/splash pages)
-  const isStandaloneScreen = ['/', '/onboarding'].includes(path);
+  const isStandaloneScreen = ['/splash', '/onboarding'].includes(path);
 
   const baseNavItems = [
     { path: '/home', icon: Compass, label: 'Découvrir' },
@@ -108,7 +108,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
           {/* Center: Clean Desktop Navigation Links */}
           <nav className="hidden md:flex items-center gap-1.5 lg:gap-2">
             {navItems.map((item) => {
-              const isActive = path === item.path;
+              const isActive = path === item.path || (item.path === '/home' && (path === '/' || path === ''));
               const Icon = item.icon;
               return (
                 <Link
@@ -362,7 +362,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
               Navigation
             </p>
             {navItems.map((item) => {
-              const isActive = path === item.path;
+              const isActive = path === item.path || (item.path === '/home' && (path === '/' || path === ''));
               const Icon = item.icon;
               return (
                 <Link
@@ -482,7 +482,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
       {/* ================= FIXED STABLE MOBILE BOTTOM BAR ================= */}
       <nav aria-label="Navigation mobile" className="md:hidden fixed bottom-0 left-0 right-0 z-40 w-full bg-white/95 dark:bg-brand-dark/95 bg-gradient-to-r from-orange-500/15 via-white dark:via-brand-dark to-orange-500/15 backdrop-blur-xl border-t border-orange-200/80 dark:border-slate-800 px-3 pt-2 pb-[calc(0.6rem+env(safe-area-inset-bottom,0px))] flex items-center justify-around shrink-0 shadow-[0_-4px_24px_-2px_rgba(249,115,22,0.14)]">
         {navItems.map((item) => {
-          const isActive = path === item.path;
+          const isActive = path === item.path || (item.path === '/home' && (path === '/' || path === ''));
           const Icon = item.icon;
           return (
             <Link

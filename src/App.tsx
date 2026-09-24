@@ -17,7 +17,6 @@ import { OrganizerHubPage } from './pages/OrganizerHubPage';
 import { OrganizerKycPage } from './pages/OrganizerKycPage';
 import { ScannerPage } from './pages/ScannerPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
-import { RoleSwitcherBanner } from './components/RoleSwitcherBanner';
 
 
 function AppRoutes() {
@@ -49,7 +48,6 @@ function AppRoutes() {
 
   return (
     <>
-      <RoleSwitcherBanner />
       <PhoneContainer>
         <Routes location={renderedLocation}>
           {/* 1. Main discovery home screen (direct landing on announcements) */}
