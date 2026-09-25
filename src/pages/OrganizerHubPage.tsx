@@ -232,13 +232,13 @@ export const OrganizerHubPage: React.FC = () => {
         </div>
         <h2 className="text-lg font-display font-extrabold text-slate-900">Espace Organisateur Verrouillé</h2>
         <p className="text-xs text-slate-600 max-w-sm mt-2 leading-relaxed">
-          Pour créer des événements, gérer vos statistiques de vente et nommer vos scanneurs de billets, vous devez vérifier votre identité légale (Email et pièce d'identité).
+          Pour créer des événements, gérer vos statistiques de vente et nommer vos scanneurs de billets, vous devez vérifier votre identité légale (pièce d'identité).
         </p>
         <button
           onClick={() => navigate('/organisateur/verification')}
           className="mt-6 px-6 py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-orange-500/25 cursor-pointer active:scale-95 transition-all"
         >
-          Vérifier mon Identité (Email + Pièce d'identité)
+          Vérifier mon Identité (Pièce d'identité)
         </button>
       </div>
     );

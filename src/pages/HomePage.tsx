@@ -124,7 +124,7 @@ export const HomePage: React.FC = () => {
               Vous organisez un concert, match ou événement ?
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Vérifiez votre identité (Email + pièce d'identité) pour publier vos billets, accéder au tableau de bord des statistiques en direct et nommer vos scanneurs de billets à l'entrée.
+              Vérifiez votre identité (pièce d'identité) pour publier vos billets, accéder au tableau de bord des statistiques en direct et nommer vos scanneurs de billets à l'entrée.
             </p>
           </div>
 
