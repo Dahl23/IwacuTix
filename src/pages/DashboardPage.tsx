@@ -3,7 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { OrganisateurProfilApi, ScanneurAssignment } from '../types';
 import { api } from '../services/apiClient';
+import { parseApiError } from '../utils/apiErrors';
 import { MediaGalleryManager } from '../components/MediaGalleryManager';
+import { ScannerUserSelector } from '../components/ScannerUserSelector';
 import { 
   ChevronLeft, 
   TrendingUp, 
@@ -21,7 +23,8 @@ import {
   Trash2,
   Calendar,
   Clock,
-  ArrowRight
+  ArrowRight,
+  AlertCircle
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -40,8 +43,10 @@ export const DashboardPage: React.FC = () => {
   // Scanner staff assignment state (via API)
   const [newScannerName, setNewScannerName] = useState('');
   const [newScannerPhone, setNewScannerPhone] = useState('');
+  const [stationLabel, setStationLabel] = useState('');
   const [assignSuccess, setAssignSuccess] = useState(false);
-  const [assignError, setAssignError] = useState(false);
+  const [assignErrorMsg, setAssignErrorMsg] = useState('');
+  const [isAssigning, setIsAssigning] = useState(false);
 
   // Organizer announcement update state
   const [updateMessage, setUpdateMessage] = useState('');
@@ -129,28 +134,39 @@ export const DashboardPage: React.FC = () => {
 
   const handleAssignScanner = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newScannerName.trim() || !newScannerPhone.trim()) return;
+    setAssignErrorMsg('');
+    setAssignSuccess(false);
 
-    if (!monProfil) {
-      setAssignError(true);
-      setTimeout(() => setAssignError(false), 3000);
+    const target = newScannerPhone.trim();
+    if (!target) {
+      setAssignErrorMsg("Veuillez choisir un utilisateur ou saisir un numéro/identifiant de scanneur.");
       return;
     }
-    setAssignError(false);
+
+    if (!monProfil) {
+      setAssignErrorMsg("Profil organisateur non disponible. Veuillez vérifier votre connexion.");
+      return;
+    }
+
+    setIsAssigning(true);
     try {
       await api.organisateurs.assignerScanneur(monProfil.id, {
-        telephone_ou_user_id: newScannerPhone.trim().replace(/^\+257\s*/, '+257').replace(/\s+/g, ''),
+        telephone_ou_user_id: target.replace(/^\+257\s*/, '+257').replace(/\s+/g, ''),
         event_id: event.id,
       });
       const scans = await api.organisateurs.getScanneurs(monProfil.id);
       if (scans && scans.results) setApiScanners(scans.results);
       setNewScannerName('');
       setNewScannerPhone('');
+      setStationLabel('');
       setAssignSuccess(true);
-      setTimeout(() => setAssignSuccess(false), 3000);
-    } catch {
-      setAssignError(true);
-      setTimeout(() => setAssignError(false), 3000);
+      setTimeout(() => setAssignSuccess(false), 4000);
+    } catch (err: any) {
+      const parsed = parseApiError(err);
+      setAssignErrorMsg(parsed.message || "L'assignation a échoué. Vérifiez que l'utilisateur possède un compte actif.");
+      setTimeout(() => setAssignErrorMsg(''), 5000);
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -161,8 +177,8 @@ export const DashboardPage: React.FC = () => {
       const scans = await api.organisateurs.getScanneurs(monProfil.id);
       if (scans && scans.results) setApiScanners(scans.results);
     } catch {
-      setAssignError(true);
-      setTimeout(() => setAssignError(false), 3000);
+      setAssignErrorMsg('Erreur lors de la révocation du scanneur.');
+      setTimeout(() => setAssignErrorMsg(''), 4000);
     }
   };
 
@@ -326,45 +342,68 @@ export const DashboardPage: React.FC = () => {
             ))}
           </div>
 
-          {/* Add Scanner Form */}
-          <form onSubmit={handleAssignScanner} className="pt-2 border-t border-slate-100 space-y-2">
-            <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">
-              + Assigner un nouveau scanneur
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="text"
-                placeholder="Nom du scanneur (ex: Porte C)"
-                value={newScannerName}
-                onChange={(e) => setNewScannerName(e.target.value)}
-                className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-primary"
-              />
-              <input
-                type="text"
-                placeholder="Téléphone (+257 ...)"
-                value={newScannerPhone}
-                onChange={(e) => setNewScannerPhone(e.target.value)}
-                className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-primary"
-              />
+          {/* Add Scanner Form with User Selector */}
+          <form onSubmit={handleAssignScanner} className="pt-3 border-t border-slate-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase text-slate-500 font-bold block">
+                + Assigner un agent scanneur (Base de données)
+              </span>
+              <span className="text-[9px] text-slate-400 font-mono">
+                Compte actif requis
+              </span>
             </div>
-            <div className="flex items-center justify-between pt-1">
-              {assignSuccess && (
-                <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
-                  <Check className="w-3 h-3" /> Scanneur assigné avec succès !
-                </span>
-              )}
-              {assignError && (
-                <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
-                  L'assignation a échoué : backend indisponible ou profil organisateur non chargé.
-                </span>
-              )}
+
+            <ScannerUserSelector
+              organisateurId={monProfil?.id || ''}
+              selectedTarget={newScannerPhone}
+              selectedName={newScannerName}
+              onSelect={({ target, name }) => {
+                setNewScannerPhone(target);
+                setNewScannerName(name);
+              }}
+              onReset={() => {
+                setNewScannerPhone('');
+                setNewScannerName('');
+              }}
+            />
+
+            {newScannerPhone && (
+              <div className="space-y-1.5 animate-in fade-in">
+                <label className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider block">
+                  Poste / Porte d'entrée (Optionnel)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Porte Principale, Accès VIP, Entrée Sud..."
+                  value={stationLabel}
+                  onChange={(e) => setStationLabel(e.target.value)}
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500/30"
+                />
+              </div>
+            )}
+
+            {assignSuccess && (
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2 animate-in fade-in">
+                <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Agent scanneur habilité avec succès pour cet événement !</span>
+              </div>
+            )}
+
+            {assignErrorMsg && (
+              <div className="p-2.5 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl flex items-center gap-2 animate-in fade-in">
+                <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                <span>{assignErrorMsg}</span>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-1">
               <button
                 type="submit"
-                disabled={!newScannerName.trim() || !newScannerPhone.trim()}
-                className="ml-auto px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                disabled={isAssigning || !newScannerPhone.trim()}
+                className="px-4 py-2.5 bg-purple-700 hover:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
               >
-                <UserPlus className="w-3 h-3" />
-                Créer l'assignation
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>{isAssigning ? 'Habilitation...' : 'Valider l\'assignation'}</span>
               </button>
             </div>
           </form>

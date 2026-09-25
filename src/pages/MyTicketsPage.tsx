@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { Ticket, Calendar, MapPin, ChevronRight, Inbox, Lock, Sparkles, ArrowRight, RefreshCcw } from 'lucide-react';
+import { Ticket, Calendar, MapPin, ChevronRight, Inbox, Lock, Sparkles, ArrowRight, RefreshCcw, QrCode, User } from 'lucide-react';
 
 export const MyTicketsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -177,6 +177,13 @@ export const MyTicketsPage: React.FC = () => {
                     {t.eventTitle}
                   </h4>
 
+                  {t.isGift && t.recipientName && (
+                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-semibold border border-indigo-100 dark:border-indigo-800/40">
+                      <User className="w-3 h-3 text-indigo-500" />
+                      <span>Bénéficiaire : {t.recipientName}</span>
+                    </div>
+                  )}
+
                   <div className="space-y-1 text-[11px] text-slate-600 dark:text-slate-400">
                     <div className="flex items-center gap-1.5 font-mono">
                       <Calendar className="w-3.5 h-3.5 text-orange-500 shrink-0" />
@@ -194,8 +201,13 @@ export const MyTicketsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="p-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 border border-slate-100 dark:border-slate-700 group-hover:text-orange-500 transition-colors shrink-0">
-                  <ChevronRight className="w-5 h-5" />
+                <div className="flex flex-col items-center gap-1.5 shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-500/30 flex items-center justify-center group-hover:bg-orange-500 group-hover:text-white transition-all shadow-xs">
+                    <QrCode className="w-5 h-5" />
+                  </div>
+                  <span className="text-[9px] font-mono font-bold text-slate-400 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+                    Pass QR
+                  </span>
                 </div>
               </div>
             ))}

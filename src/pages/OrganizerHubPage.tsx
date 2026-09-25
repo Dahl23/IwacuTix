@@ -4,6 +4,8 @@ import { useApp } from '../AppContext';
 import { Event, TicketCategory, OrganisateurStats, ScanneurAssignment } from '../types';
 import { api, API_BASE_URL } from '../services/apiClient';
 import { toAbsoluteApiUrl } from '../services/apiMappers';
+import { parseApiError } from '../utils/apiErrors';
+import { ScannerUserSelector } from '../components/ScannerUserSelector';
 import { 
   TrendingUp, 
   Users, 
@@ -23,7 +25,8 @@ import {
   BarChart3,
   Search,
   UserPlus,
-  Trash2
+  Trash2,
+  Loader2
 } from 'lucide-react';
 
 export const OrganizerHubPage: React.FC = () => {
@@ -137,6 +140,8 @@ export const OrganizerHubPage: React.FC = () => {
   const totalTicketsSold = myTickets.length;
   const totalScannedTickets = myTickets.filter(t => t.status === 'utilise').length;
 
+  const [isAssigning, setIsAssigning] = useState(false);
+
   const handleAddScanner = async (e: React.FormEvent) => {
     e.preventDefault();
     setScannerErrorMsg('');
@@ -146,31 +151,33 @@ export const OrganizerHubPage: React.FC = () => {
       setScannerErrorMsg('Veuillez sélectionner un de vos événements.');
       return;
     }
-    if (!scannerNom.trim()) {
-      setScannerErrorMsg('Veuillez entrer le nom du scanneur.');
-      return;
-    }
-    if (!scannerPhone.trim()) {
-      setScannerErrorMsg('Veuillez entrer le numéro de téléphone du scanneur.');
+    const target = scannerPhone.trim();
+    if (!target) {
+      setScannerErrorMsg('Veuillez choisir un utilisateur de la base ou renseigner un numéro de téléphone / identifiant.');
       return;
     }
 
     if (monProfilId) {
+      setIsAssigning(true);
       try {
         await api.organisateurs.assignerScanneur(monProfilId, {
-          telephone_ou_user_id: scannerPhone.trim().replace(/^\+257\s*/, '+257').replace(/\s+/g, ''),
+          telephone_ou_user_id: target.replace(/^\+257\s*/, '+257').replace(/\s+/g, ''),
           event_id: targetEventId,
         });
         const scans = await api.organisateurs.getScanneurs(monProfilId);
         if (scans && scans.results) setApiScanners(scans.results);
+        const assignedName = scannerNom.trim() || target;
         setScannerNom('');
         setScannerPhone('');
-        setScannerSuccessMsg(`Scanneur « ${scannerNom.trim()} » habilité avec succès pour cet événement !`);
-        setTimeout(() => setScannerSuccessMsg(''), 4000);
+        setScannerSuccessMsg(`Scanneur « ${assignedName} » habilité avec succès pour cet événement !`);
+        setTimeout(() => setScannerSuccessMsg(''), 5000);
         return;
-      } catch {
-        setScannerErrorMsg('Habilitation échouée : backend indisponible. Réessayez dans quelques secondes.');
+      } catch (err: any) {
+        const parsed = parseApiError(err);
+        setScannerErrorMsg(parsed.message || 'Habilitation échouée. Vérifiez que l\'utilisateur possède un compte existant.');
         return;
+      } finally {
+        setIsAssigning(false);
       }
     }
     setScannerErrorMsg('Profil organisateur non chargé. Réessayez.');
@@ -558,61 +565,66 @@ export const OrganizerHubPage: React.FC = () => {
                 </div>
               )}
 
-              <form onSubmit={handleAddScanner} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Événement rattaché <span className="text-red-500">*</span>
+              <form onSubmit={handleAddScanner} className="space-y-4">
+                {/* 1. Choix de l'événement */}
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-800">
+                    1. Sélectionner l'événement rattaché <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={targetEventId}
                     onChange={(e) => setTargetEventId(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium bg-white focus:ring-2 focus:ring-brand-primary outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold bg-white text-slate-800 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 outline-none shadow-xs"
                     required
                   >
-                    <option value="">Sélectionnez un événement...</option>
+                    <option value="">Sélectionnez un de vos événements officiels...</option>
                     {myEvents.map((e) => (
                       <option key={e.id} value={e.id}>
-                        {e.title}
+                        {e.title} ({e.date} • {e.location})
                       </option>
                     ))}
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Nom du compte <span className="text-red-500">*</span>
+                {/* 2. Énumération des utilisateurs de la base + Recherche */}
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-800">
+                    2. Choisir l'utilisateur dans la base de données <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={scannerNom}
-                    onChange={(e) => setScannerNom(e.target.value)}
-                    placeholder="Rechercher par nom"
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-brand-primary outline-none"
-                    required
+                  <ScannerUserSelector
+                    organisateurId={monProfilId || ''}
+                    selectedTarget={scannerPhone}
+                    selectedName={scannerNom}
+                    onSelect={({ target, name }) => {
+                      setScannerPhone(target);
+                      setScannerNom(name);
+                    }}
+                    onReset={() => {
+                      setScannerPhone('');
+                      setScannerNom('');
+                    }}
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Téléphone du compte existant <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="tel"
-                      value={scannerPhone}
-                      onChange={(e) => setScannerPhone(e.target.value)}
-                      placeholder="+257 79 123 456"
-                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-brand-primary outline-none"
-                      required
-                    />
-                    <button
-                      type="submit"
-                      className="px-4 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs shrink-0 cursor-pointer active:scale-95 transition-all flex items-center gap-1"
-                    >
-                      <UserPlus className="w-3.5 h-3.5" />
-                      Habiliter
-                    </button>
-                  </div>
+                {/* 3. Bouton d'action */}
+                <div className="pt-2 flex items-center justify-end gap-3">
+                  <button
+                    type="submit"
+                    disabled={isAssigning || !targetEventId || !scannerPhone.trim()}
+                    className="w-full sm:w-auto px-6 py-3 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs shadow-md shadow-purple-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isAssigning ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Habilitation en cours...</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-4 h-4" />
+                        <span>Habiliter cet agent pour cet événement</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </form>
             </div>
