@@ -16,7 +16,8 @@ import {
   Users, 
   TrendingUp, 
   Save, 
-  ArrowUpRight 
+  ArrowUpRight,
+  AlertTriangle
 } from 'lucide-react';
 
 export const SuperAdminPage: React.FC = () => {
@@ -31,16 +32,30 @@ export const SuperAdminPage: React.FC = () => {
     tickets
   } = useApp();
 
-  const [commissionTaux, setCommissionTaux] = useState(parametrePlateforme.commission_taux_defaut);
+const [commissionTaux, setCommissionTaux] = useState(parametrePlateforme.commission_taux_defaut);
   const [canalCommission, setCanalCommission] = useState<ParametrePlateforme['canal_commission']>(parametrePlateforme.canal_commission);
   const [destinationCommission, setDestinationCommission] = useState(parametrePlateforme.destination_commission);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [savedError, setSavedError] = useState<string | null>(null);
 
   // Données réelles /api/admin/...
   const [paramsData, setParamsData] = useState<ParametrePlateforme | null>(null);
   const [apiStats, setApiStats] = useState<AdminStats | null>(null);
   const [apiDemandes, setApiDemandes] = useState<DemandeOrganisateur[] | null>(null);
   const [auditLogs, setAuditLogs] = useState<TransactionAuditLog[] | null>(null);
+
+  // Filtres de l'historique d'audit exposés dans l'UI (GET /api/admin/historique/)
+  const [histOrder, setHistOrder] = useState('');
+  const [histTypeEvenement, setHistTypeEvenement] = useState('');
+  const [histCanal, setHistCanal] = useState('');
+  const [histReference, setHistReference] = useState('');
+
+  const loadHistorique = async (params?: { order?: string; type_evenement?: string; canal?: string; reference_externe?: string }) => {
+    try {
+      const h = await api.admin.getHistorique(params);
+      if (h && h.results) setAuditLogs(h.results);
+    } catch {}
+  };
 
   useEffect(() => {
     (async () => {
@@ -59,32 +74,29 @@ export const SuperAdminPage: React.FC = () => {
         const d = await api.admin.getDemandesOrganisateurs();
         if (d && d.results) setApiDemandes(d.results);
       } catch {}
-      try {
-        const h = await api.admin.getHistorique();
-        if (h && h.results) setAuditLogs(h.results);
-      } catch {}
+      await loadHistorique();
     })();
   }, []);
 
   const handleSaveParams = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSavedError(null);
+    // PUT : remplacement complet de la ressource ParametrePlateforme (aucun champ omis)
+    const payload: ParametrePlateforme = {
+      ...(paramsData ?? parametrePlateforme),
+      commission_taux_defaut: commissionTaux,
+      canal_commission: canalCommission,
+      destination_commission: destinationCommission,
+    };
     try {
-      const updated = await api.admin.updateParametresPlateforme({
-        commission_taux_defaut: commissionTaux,
-        canal_commission: canalCommission,
-        destination_commission: destinationCommission,
-      });
+      const updated = await api.admin.updateParametrePlateforme(payload);
       setParamsData(updated);
       updateParametrePlateforme(updated);
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
     } catch {
-      updateParametrePlateforme({
-        commission_taux_defaut: commissionTaux,
-        canal_commission: canalCommission,
-        destination_commission: destinationCommission,
-      });
+      setSavedError('Enregistrement échoué : backend indisponible. Aucune modification n\'a été appliquée.');
     }
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
   };
 
   // Décision SuperAdmin sur une demande d'adhésion organisateur
@@ -216,6 +228,45 @@ export const SuperAdminPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Règlements automatiques — alerte visible en cas d'échec définitif (GET /api/admin/stats/) */}
+        {apiStats && (
+          <div className={`rounded-xl border p-4 space-y-2.5 ${
+            apiStats.reglements.organisateur_echecs_definitifs > 0
+              ? 'bg-red-50 border-red-200'
+              : 'bg-white border-slate-200 shadow-xs'
+          }`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <AlertTriangle className={`w-4 h-4 ${apiStats.reglements.organisateur_echecs_definitifs > 0 ? 'text-red-600' : 'text-slate-400'}`} />
+                Règlements Automatiques aux Organisateurs
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-2">
+                <span className="text-[10px] text-slate-500 block">Commissions réussies</span>
+                <span className="font-mono font-bold text-emerald-700">{apiStats.reglements.commission_reussis}</span>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-2">
+                <span className="text-[10px] text-slate-500 block">Règlements organisateurs réussis</span>
+                <span className="font-mono font-bold text-emerald-700">{apiStats.reglements.organisateur_reussis}</span>
+              </div>
+              <div className="bg-red-50 border border-red-100 rounded-lg p-2">
+                <span className="text-[10px] text-slate-500 block">Échecs définitifs</span>
+                <span className="font-mono font-bold text-red-700">{apiStats.reglements.organisateur_echecs_definitifs}</span>
+              </div>
+            </div>
+            {apiStats.reglements.organisateur_echecs_definitifs > 0 && (
+              <div className="p-3 rounded-xl bg-red-600 text-white text-xs flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  <strong>{apiStats.reglements.organisateur_echecs_definitifs} versement(s) organisateur en échec définitif.</strong>{' '}
+                  Le reversement est bloqué : le destinataire ne récupérera pas ces fonds. Action requise (hors périmètre actuel des API exposées).
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 1. Platform Parameters (Section 5 du cahier des charges) */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -285,7 +336,12 @@ export const SuperAdminPage: React.FC = () => {
             </div>
 
             <div className="flex items-center justify-between pt-1">
-              {savedSuccess ? (
+              {savedError ? (
+                <span className="text-[11px] text-red-600 font-semibold flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {savedError}
+                </span>
+              ) : savedSuccess ? (
                 <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   Paramètres sauvegardés avec succès !
@@ -355,22 +411,31 @@ export const SuperAdminPage: React.FC = () => {
                   )}
                 </div>
 
-                {org.statut_verification === 'EN_ATTENTE' && (
-                  <div className="flex items-center gap-2 pt-1">
+                {(org.statut_verification === 'EN_ATTENTE' || org.statut_verification === 'REJETE AUTO') && (
+                  <div className="flex items-center gap-2 pt-1 flex-wrap">
                     <button
                       onClick={() => void handleDecideDemande(org.id, 'APPROUVE')}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                      disabled={org.statut_verification === 'REJETE AUTO'}
+                      title={org.statut_verification === 'REJETE AUTO' ? 'Rejetée automatiquement — plus aucune décision possible' : undefined}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       Approuver le KYC
                     </button>
                     <button
                       onClick={() => void handleDecideDemande(org.id, 'REJETE')}
-                      className="px-3 py-1.5 bg-slate-200 hover:bg-red-100 hover:text-red-700 text-slate-700 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors"
+                      disabled={org.statut_verification === 'REJETE AUTO'}
+                      title={org.statut_verification === 'REJETE AUTO' ? 'Rejetée automatiquement — plus aucune décision possible' : undefined}
+                      className="px-3 py-1.5 bg-slate-200 hover:bg-red-100 hover:text-red-700 text-slate-700 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-slate-200"
                     >
                       <XCircle className="w-3.5 h-3.5" />
                       Rejeter
                     </button>
+                    {org.statut_verification === 'REJETE AUTO' && (
+                      <span className="text-[10px] text-violet-700 italic font-semibold">
+                        Rejet automatique déjà acté — cette demande ne peut plus être approuvée (demande_rejetee_auto).
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -381,14 +446,81 @@ export const SuperAdminPage: React.FC = () => {
         {/* 3. Automatic Payouts Journal (Section 6.E) */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
           <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-              <TrendingUp className="w-4 h-4 text-emerald-600" />
+<span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
               Journal des Versements Automatiques (Section 6.E)
             </span>
             <span className="text-[10px] font-mono text-slate-400">
-              Au fil des encaissements
+              {auditLogs !== null && auditLogs.length > 0 ? `${journalEntries.length} entrée(s)` : 'Au fil des encaissements'}
             </span>
           </div>
+
+          {/* Filtres de l'historique d'audit — exposés dans l'UI, transmis tels quels à GET /api/admin/historique/ */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void loadHistorique({
+                order: histOrder.trim() || undefined,
+                type_evenement: histTypeEvenement.trim() || undefined,
+                canal: histCanal || undefined,
+                reference_externe: histReference.trim() || undefined,
+              });
+            }}
+            className="px-3.5 py-3 bg-slate-50 border-b border-slate-200 grid grid-cols-2 sm:grid-cols-5 gap-2"
+          >
+            <input
+              type="text"
+              value={histOrder}
+              onChange={(e) => setHistOrder(e.target.value)}
+              placeholder="order (ex. -date_creation)"
+              className="text-xs bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-brand-primary"
+            />
+            <input
+              type="text"
+              value={histTypeEvenement}
+              onChange={(e) => setHistTypeEvenement(e.target.value)}
+              placeholder="type_evenement"
+              className="text-xs bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-brand-primary"
+            />
+            <select
+              value={histCanal}
+              onChange={(e) => setHistCanal(e.target.value)}
+              className="text-xs bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-brand-primary"
+            >
+              <option value="">canal (tous)</option>
+              <option value="BITLIBERA">BITLIBERA</option>
+              <option value="BLINK">BLINK</option>
+              <option value="MANUEL">MANUEL</option>
+            </select>
+            <input
+              type="text"
+              value={histReference}
+              onChange={(e) => setHistReference(e.target.value)}
+              placeholder="reference_externe"
+              className="text-xs bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-2 focus:ring-brand-primary"
+            />
+            <div className="flex gap-1.5">
+              <button
+                type="submit"
+                className="flex-1 px-2 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+              >
+                Filtrer
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setHistOrder('');
+                  setHistTypeEvenement('');
+                  setHistCanal('');
+                  setHistReference('');
+                  void loadHistorique();
+                }}
+                className="px-2 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+              >
+                Réinitialiser
+              </button>
+            </div>
+          </form>
 
           <div className="divide-y divide-slate-100">
             {journalEntries.map((vst) => (

@@ -24,7 +24,6 @@ export interface OrderDraft {
   event_id: string;
   tier_id: string;
   quantite: number;
-  telephone?: string;
   destinataires?: ApiDestinataireBillet[];
 }
 

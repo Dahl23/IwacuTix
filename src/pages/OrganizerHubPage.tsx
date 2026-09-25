@@ -650,13 +650,13 @@ export const OrganizerHubPage: React.FC = () => {
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-900">{scanner.user_nom}</span>
+                            <span className="text-xs font-bold text-slate-900">{scanner.nom_scanneur}</span>
                             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
                               Actif
                             </span>
                           </div>
                           <div className="text-[11px] text-slate-500 flex items-center gap-2">
-                            <span>📞 {scanner.user_telephone}</span>
+                            <span>📞 {scanner.telephone_scanneur}</span>
                             <span>•</span>
                             <span className="font-semibold text-slate-700">Événement : {scanner.event_titre}</span>
                           </div>
@@ -664,7 +664,7 @@ export const OrganizerHubPage: React.FC = () => {
                       </div>
 
                       <button
-                        onClick={() => void handleRemoveScanner(scanner.id, scanner.user_nom)}
+                        onClick={() => void handleRemoveScanner(scanner.id, scanner.nom_scanneur)}
                         className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
                         title="Retirer l'accès scanneur (définitif)"
                       >

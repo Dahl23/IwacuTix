@@ -189,7 +189,7 @@ export const ConfirmationPage: React.FC = () => {
     setSubmittingOtp(true);
     setMessage(null);
     try {
-      const res = await api.tickets.confirmerLumicash({ order_id: inv.orderId, otp: otp.trim(), telephone: phone || user.phone });
+      const res = await api.tickets.confirmerLumicash({ order_id: inv.orderId, otp: otp.trim() });
       if (res.order.statut === 'SUCCESS') {
         if (idx + 1 < drafts.length) {
           setOtp('');

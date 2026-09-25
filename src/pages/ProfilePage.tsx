@@ -190,7 +190,7 @@ export const ProfilePage: React.FC = () => {
 
   // Active assignments for this user
   const userAssignments = apiAssignments.filter(
-    (a) => a.user_id === user.id || a.user_telephone === user.phone
+    (a) => a.user_id === user.id || a.telephone_scanneur === user.phone
   );
 
   const profileOptions = [

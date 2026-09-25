@@ -309,10 +309,10 @@ export const DashboardPage: React.FC = () => {
                 className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs"
               >
                 <div className="space-y-0.5 min-w-0">
-                  <span className="font-bold text-slate-800 block truncate">{asg.user_nom}</span>
+                  <span className="font-bold text-slate-800 block truncate">{asg.nom_scanneur}</span>
                   <span className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
                     <Smartphone className="w-3 h-3 text-slate-400" />
-                    {asg.user_telephone} • {asg.date_assignation}
+                    {asg.telephone_scanneur} • {asg.date_assignation}
                   </span>
                 </div>
                 <button

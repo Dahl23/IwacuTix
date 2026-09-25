@@ -80,25 +80,6 @@ export const OrganizerKycPage: React.FC = () => {
     setStep(2);
   };
 
-  const handleSaveEmail = async () => {
-    setErrorMsg('');
-    if (!email.trim()) {
-      setErrorMsg('Veuillez renseigner une adresse email valide.');
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      const profil = await api.organisateurs.updateMonProfil({ email: email.trim() });
-      if (profil && profil.email) setEmail(profil.email);
-      setErrorMsg('');
-    } catch (err) {
-      const { message } = parseApiError(err);
-      setErrorMsg(message || 'Impossible de mettre à jour l\'adresse email.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleSendEmailOtp = async () => {
     setErrorMsg('');
     setIsSubmitting(true);
@@ -109,7 +90,7 @@ export const OrganizerKycPage: React.FC = () => {
     } catch (err) {
       const { message, code: apiCode } = parseApiError(err);
       if (apiCode === 'email_absent') {
-        setErrorMsg('Aucune adresse email sur votre profil organisateur. Ajoutez une adresse email valide ci-dessus puis re-tentez l\'envoi.');
+        setErrorMsg('Aucune adresse email sur votre compte. Ajoutez-en une dans votre profil (Mon compte) puis re-tentez l\'envoi.');
       } else if (apiCode === 'tentatives_epuisees') {
         setErrorMsg('Trop de demandes récentes. Veuillez réessayer dans quelques minutes.');
       } else {
@@ -410,19 +391,11 @@ export const OrganizerKycPage: React.FC = () => {
                     <input
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      readOnly
                       placeholder="votre-email@domaine.com"
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium bg-slate-50 text-slate-700 focus:outline-none cursor-not-allowed"
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleSaveEmail()}
-                    disabled={isSubmitting}
-                    className="px-3 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
-                  >
-                    {isSubmitting ? '...' : 'Enregistrer'}
-                  </button>
                   <button
                     type="button"
                     onClick={() => void handleSendEmailOtp()}
@@ -434,7 +407,7 @@ export const OrganizerKycPage: React.FC = () => {
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
                   <Info className="w-3 h-3" />
-                  Enregistrez d'abord votre email si le profil n'en contient pas, puis envoyez le code.
+                  L'adresse email provient de votre compte IwacuTix (modifiable dans votre profil). Le code de vérification y sera envoyé.
                 </p>
               </div>
 

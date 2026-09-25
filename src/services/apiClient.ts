@@ -489,7 +489,6 @@ export const api = {
       event_id: string;
       tier_id: string;
       quantite: number;
-      telephone?: string;
       destinataires?: ApiDestinataireBillet[];
     }) =>
       request<LumicashDemanderOtpResponse>('/api/tickets/commandes/lumicash/demander-otp/', {
@@ -498,7 +497,7 @@ export const api = {
       }),
 
     // 5.2 Étape 2 Lumicash - Confirmer avec OTP
-    confirmerLumicash: (payload: { order_id: string; otp: string; telephone?: string }) =>
+    confirmerLumicash: (payload: { order_id: string; otp: string }) =>
       request<LumicashConfirmerResponse>('/api/tickets/commandes/lumicash/confirmer/', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -525,9 +524,10 @@ export const api = {
 
   // 6. SuperAdmin (Section 8)
   admin: {
-    // Paramètres globaux de la plateforme
+// Paramètres globaux de la plateforme
     getParametresPlateforme: () => request<ParametrePlateforme>('/api/admin/parametres-plateforme/'),
-    updateParametresPlateforme: (data: Partial<ParametrePlateforme>) =>
+    // PUT = remplacement complet de la ressource (pas de PATCH partiel)
+    updateParametrePlateforme: (data: ParametrePlateforme) =>
       request<ParametrePlateforme>('/api/admin/parametres-plateforme/', {
         method: 'PUT',
         body: JSON.stringify(data),

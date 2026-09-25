@@ -61,7 +61,7 @@ export const ScannerPage: React.FC = () => {
 
   const isOrganizerOrSuper = user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN';
   const userAssignments = apiAssignments.filter(
-    (a) => a.user_id === user.id || a.user_telephone === user.phone
+    (a) => a.user_id === user.id || a.telephone_scanneur === user.phone
   );
 
   const defaultEventId = (isOrganizerOrSuper ? events[0]?.id : userAssignments[0]?.event_id) || '';

@@ -40,11 +40,10 @@ export interface User {
 export interface ScanneurAssignment {
   id: string;
   user_id: string;
-  user_nom: string;
-  user_telephone: string;
+  nom_scanneur: string;
+  telephone_scanneur: string;
   event_id: string;
   event_titre: string;
-  assigne_par: string; // ID ou nom de l'organisateur
   date_assignation: string;
   actif: boolean;
 }

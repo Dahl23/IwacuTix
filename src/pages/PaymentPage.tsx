@@ -115,6 +115,8 @@ export const PaymentPage: React.FC = () => {
       }
     }
 
+    const fullPhone = paymentMethod === 'LUMICASH' ? `+257 ${phoneNumber.trim()}` : '';
+
     // Une commande par tier sélectionné, avec destinataires = quantite entrées exactement
     const orders: OrderDraft[] = cart.map((item) => {
       const destinataires: ApiDestinataireBillet[] = [];
@@ -136,7 +138,6 @@ export const PaymentPage: React.FC = () => {
         event_id: item.eventId,
         tier_id: item.tierId || '',
         quantite: item.quantity,
-        telephone: paymentMethod === 'LUMICASH' ? fullPhone : undefined,
         destinataires,
       };
     });
@@ -148,8 +149,6 @@ export const PaymentPage: React.FC = () => {
         return;
       }
     }
-
-    const fullPhone = paymentMethod === 'LUMICASH' ? `+257 ${phoneNumber.trim()}` : '';
 
     navigate('/paiement/confirmation', {
       state: {
