@@ -100,31 +100,49 @@ export const ConfirmationPage: React.FC = () => {
     setPhase('CREATING');
     setMessage('Création des factures Lightning sur le backend…');
     try {
-      const results = await Promise.all(
+      const results = await Promise.allSettled(
         drafts.map((d) =>
           api.tickets.creerCommandeLightning({ ...d, moyen_paiement: 'LIGHTNING' as const })
         )
       );
-      const created: CreatedInvoice[] = results.map((r) => ({
-        orderId: r.order.id,
-        paymentRequest: r.paiement.paymentRequest,
-        satoshis: r.paiement.satoshis ?? undefined,
-        montantFbu: r.order.montant_fbu,
-        statut: 'PENDING',
-        expiresAt: r.order.expires_at,
-      }));
+      const created: CreatedInvoice[] = [];
+      let failedCount = 0;
+      results.forEach((r) => {
+        if (r.status === 'fulfilled') {
+          const rr = r.value;
+          created.push({
+            orderId: rr.order.id,
+            paymentRequest: rr.paiement.paymentRequest,
+            satoshis: rr.paiement.satoshis ?? undefined,
+            montantFbu: rr.order.montant_fbu,
+            statut: 'PENDING',
+            expiresAt: rr.order.expires_at,
+          });
+        } else {
+          failedCount += 1;
+        }
+      });
+      if (created.length === 0) {
+        const parsed = parseApiError((results[0] as PromiseRejectedResult).reason);
+        setMessage(
+          parsed.code === 'moyen_paiement_non_accepte'
+            ? 'Ce tier n’accepte pas le paiement Lightning.'
+            : parsed.code === 'stock_insuffisant'
+            ? 'Stock insuffisant.'
+            : parsed.message || 'Création de la facture impossible.'
+        );
+        setPhase('ERROR');
+        return;
+      }
       setInvoices(created);
-      setMessage(null);
+      setMessage(
+        failedCount > 0
+          ? `${failedCount} facture(s) n'ont pas pu être créées. Les autres sont en attente de paiement.`
+          : null
+      );
       setPhase('WAIT');
     } catch (err: any) {
-      const parsed = parseApiError(err);
-      setMessage(
-        parsed.code === 'moyen_paiement_non_accepte'
-          ? 'Ce tier n’accepte pas le paiement Lightning.'
-          : parsed.code === 'stock_insuffisant'
-          ? 'Stock insuffisant (409).'
-          : parsed.message
-      );
+      setMessage('Création des factures impossible. Vérifiez votre connexion.');
       setPhase('ERROR');
     }
   };
@@ -153,7 +171,7 @@ export const ConfirmationPage: React.FC = () => {
       const parsed = parseApiError(err);
       setMessage(
         parsed.code === 'stock_insuffisant'
-          ? 'Stock insuffisant (409).'
+          ? 'Stock insuffisant.'
           : parsed.code === 'moyen_paiement_non_accepte'
           ? 'Ce tier n’accepte pas Lumicash.'
           : parsed.message
@@ -171,7 +189,7 @@ export const ConfirmationPage: React.FC = () => {
     setSubmittingOtp(true);
     setMessage(null);
     try {
-      const res = await api.tickets.confirmerLumicash({ order_id: inv.orderId, otp: otp.trim() });
+      const res = await api.tickets.confirmerLumicash({ order_id: inv.orderId, otp: otp.trim(), telephone: phone || user.phone });
       if (res.order.statut === 'SUCCESS') {
         if (idx + 1 < drafts.length) {
           setOtp('');
@@ -186,9 +204,11 @@ export const ConfirmationPage: React.FC = () => {
       const parsed = parseApiError(err);
       const code = parsed.code;
       if (code === 'paiement_echoue') {
-        setMessage('OTP incorrect ou paiement échoué (402). Demandez un nouvel OTP.');
+        setMessage('OTP incorrect ou paiement échoué. Demandez un nouvel OTP.');
+      } else if (code === 'paiement_lumicash_via_onramp') {
+        setMessage('Le paiement Lumicash est traité via l’on-ramp partenaire (BitLibera). Suivez les instructions de règlement.');
       } else if (code === 'reservation_expiree') {
-        setMessage('Réservation expirée (410). Relancez la commande depuis le panier.');
+        setMessage('Réservation expirée. Relancez la commande depuis le panier.');
         setTimeout(() => navigate('/panier'), 2500);
       } else if (code === 'paiement_deja_confirme') {
         if (idx + 1 < drafts.length) await requestLumicashOtp(idx + 1);
@@ -231,11 +251,13 @@ export const ConfirmationPage: React.FC = () => {
       }
       const newStatuts: Record<string, CreatedInvoice['statut']> = {};
       let expired = false;
+      let failed = false;
       for (const inv of pending) {
         try {
           const cmd = await api.tickets.getCommande(inv.orderId);
           newStatuts[inv.orderId] = cmd.statut as CreatedInvoice['statut'];
           if (cmd.statut === 'EXPIRE') expired = true;
+          if (cmd.statut === 'ECHEC') failed = true;
         } catch {}
       }
       if (stopped || finalizedRef.current) return;
@@ -244,7 +266,10 @@ export const ConfirmationPage: React.FC = () => {
           x && newStatuts[x.orderId] ? { ...x, statut: newStatuts[x.orderId] } : x
         )
       );
-      if (expired) {
+      if (failed) {
+        setMessage('Le paiement Lightning a échoué sur le backend.');
+        setPhase('ERROR');
+      } else if (expired) {
         setMessage('Réservation de stock expirée (10 min). Veuillez relancer la commande.');
         setPhase('EXPIRED');
       }
@@ -361,8 +386,8 @@ export const ConfirmationPage: React.FC = () => {
               <h3 className="text-base font-display font-bold text-slate-900 tracking-tight">
                 {isLightning ? 'Création de la facture Lightning…' : 'Préparation du paiement Lumicash…'}
               </h3>
-              <p className="text-xs text-brand-primary font-mono tracking-wider font-bold uppercase">
-                POST /api/tickets/commandes/
+              <p className="text-xs text-slate-500 max-w-[300px] leading-relaxed">
+                Veuillez patienter, nous préparons votre commande sur le backend sécurisé IwacuTix…
               </p>
             </div>
             {message && (
@@ -490,7 +515,7 @@ export const ConfirmationPage: React.FC = () => {
 
                 <button
                   type="submit"
-                  disabled={submittingOtp || otp.length < 4}
+                  disabled={submittingOtp || otp.length !== 6}
                   className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer active:scale-95 disabled:opacity-50"
                 >
                   {submittingOtp ? 'Validation…' : 'Confirmer le paiement'}

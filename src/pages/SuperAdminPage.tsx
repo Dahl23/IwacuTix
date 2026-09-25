@@ -26,7 +26,6 @@ export const SuperAdminPage: React.FC = () => {
     parametrePlateforme, 
     updateParametrePlateforme, 
     organisateursKyc, 
-    updateOrganisateurKyc, 
     versements,
     events,
     tickets
@@ -90,34 +89,50 @@ export const SuperAdminPage: React.FC = () => {
 
   // Décision SuperAdmin sur une demande d'adhésion organisateur
   const handleDecideDemande = async (id: string, decision: 'APPROUVE' | 'REJETE') => {
+    const motif = decision === 'REJETE'
+      ? (window.prompt('Motif du rejet (affiché à l\'organisateur) :', 'Documents non conformes') || '')
+        .trim()
+      : undefined;
     try {
-      await api.admin.deciderDemandeOrganisateur(id, { statut: decision });
+      await api.admin.deciderDemandeOrganisateur(id, { statut: decision, motif_rejet: motif });
       const d = await api.admin.getDemandesOrganisateurs();
       if (d && d.results) setApiDemandes(d.results);
     } catch {
-      updateOrganisateurKyc(id, decision === 'APPROUVE' ? 'VERIFIE' : 'REJETE');
+      alert('Décision non enregistrée : backend indisponible. Réessayez dans quelques secondes.');
     }
   };
 
   // Mapping d'une demande API vers l'affichage du panneau SuperAdmin
-  const mapStatutVerification = (statut: DemandeOrganisateur['statut']): 'VERIFIE' | 'EN_ATTENTE' | 'REJETE' => {
+  const mapStatutVerification = (statut: DemandeOrganisateur['statut']): string => {
     if (statut === 'APPROUVE') return 'VERIFIE';
-    if (statut === 'REJETE' || statut === 'REJETE_AUTO') return 'REJETE';
+    if (statut === 'REJETE_AUTO') return 'REJETE AUTO';
+    if (statut === 'REJETE') return 'REJETE';
     return 'EN_ATTENTE';
   };
 
   const displayOrgs = apiDemandes !== null
     ? apiDemandes.map((d) => ({
         id: d.id,
-        nom_structure: d.nom_entreprise,
+        nom_structure: d.nom_entreprise || d.nom_structure || 'Dossier organisateur',
         responsable: d.nom_soumis,
         telephone: d.telephone,
-        email: 'Dossier en attente de validation',
+        email: '',
         statut_verification: mapStatutVerification(d.statut),
-        commission_taux: 5,
-        moyens: ['Dossier d\'adhésion soumis'],
+        justification: d.justification || null,
+        documentVerification: d.document_verification || null,
+        motif_rejet: d.motif_rejet || null,
       }))
-    : organisateursKyc;
+    : organisateursKyc.map((o) => ({
+        id: o.id,
+        nom_structure: o.nom_structure,
+        responsable: o.responsable,
+        telephone: o.telephone,
+        email: o.email,
+        statut_verification: o.statut_verification,
+        justification: null,
+        documentVerification: null,
+        motif_rejet: null,
+      }));
 
   // Journal : historique de transactions API en priorité, sinon versements simulés
   const journalEntries: Versement[] = auditLogs !== null && auditLogs.length > 0
@@ -130,7 +145,7 @@ export const SuperAdminPage: React.FC = () => {
         montant_sats: log.montant_sats,
         destination: log.reference_externe || '-',
         statut: (log.statut === 'ECHEC' ? 'ECHEC' : log.statut === 'REUSSI' ? 'REUSSI' : 'EN_COURS') as Versement['statut'],
-        reference_transaction: log.reference_externe || `ITX-${log.id}`,
+        reference_transaction: log.reference_externe || 'Non disponible',
         date_creation: log.date_creation ? new Date(log.date_creation).toLocaleDateString('fr-FR') : '-',
       }))
     : versements;
@@ -309,12 +324,14 @@ export const SuperAdminPage: React.FC = () => {
                   <div>
                     <h4 className="font-bold text-xs text-slate-900">{org.nom_structure}</h4>
                     <p className="text-[10px] text-slate-500">
-                      Resp: {org.responsable} • {org.telephone} • {org.email}
+                      Resp: {org.responsable} • {org.telephone}{org.email ? ` • ${org.email}` : ''}
                     </p>
                   </div>
                   <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold ${
                     org.statut_verification === 'VERIFIE'
                       ? 'bg-emerald-100 text-emerald-800'
+                      : org.statut_verification === 'REJETE AUTO'
+                      ? 'bg-violet-100 text-violet-800'
                       : org.statut_verification === 'EN_ATTENTE'
                       ? 'bg-amber-100 text-amber-800'
                       : 'bg-red-100 text-red-800'
@@ -324,10 +341,18 @@ export const SuperAdminPage: React.FC = () => {
                 </div>
 
                 <div className="text-[10px] font-mono text-slate-600 bg-slate-50 p-2 rounded-lg space-y-0.5">
-                  <div className="text-slate-400 uppercase text-[9px]">Canaux de reversement configurés :</div>
-                  {org.moyens.map((m, i) => (
-                    <div key={i} className="text-slate-700 font-semibold">• {m}</div>
-                  ))}
+                  <div className="text-slate-400 uppercase text-[9px]">Dossier d'adhésion :</div>
+                  {org.justification ? (
+                    <div className="text-slate-700 font-semibold">Justification : {org.justification}</div>
+                  ) : (
+                    <div className="text-slate-700 font-semibold">Demande d'adhésion envoyée (KYC).</div>
+                  )}
+                  {org.documentVerification && (
+                    <div className="text-slate-500">Document de vérification fourni.</div>
+                  )}
+                  {org.motif_rejet && (
+                    <div className="text-red-600 font-semibold">Motif de rejet : {org.motif_rejet}</div>
+                  )}
                 </div>
 
                 {org.statut_verification === 'EN_ATTENTE' && (
@@ -361,7 +386,7 @@ export const SuperAdminPage: React.FC = () => {
               Journal des Versements Automatiques (Section 6.E)
             </span>
             <span className="text-[10px] font-mono text-slate-400">
-              Hebdomadaire
+              Au fil des encaissements
             </span>
           </div>
 

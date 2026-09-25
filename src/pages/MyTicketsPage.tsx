@@ -7,7 +7,7 @@ export const MyTicketsPage: React.FC = () => {
   const navigate = useNavigate();
   const { tickets, isUserVerified, openAuthModal, refreshTicketsFromApi } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'valide' | 'utilise'>('valide');
+  const [activeTab, setActiveTab] = useState<'valide' | 'historique'>('valide');
   const [refreshing, setRefreshing] = useState(false);
 
   // Recharger les billets depuis /api/tickets/mes-billets/ dès qu'un compte est vérifié
@@ -24,7 +24,9 @@ export const MyTicketsPage: React.FC = () => {
   }, [isUserVerified, refreshTicketsFromApi]);
 
   const userTickets = isUserVerified ? tickets : [];
-  const filteredTickets = userTickets.filter((t) => t.status === activeTab);
+  const filteredTickets = userTickets.filter((t) =>
+    activeTab === 'valide' ? t.status === 'valide' : t.status !== 'valide'
+  );
 
   const formatPrice = (price: number) => {
     if (price === 0) return 'Gratuit';
@@ -70,14 +72,14 @@ export const MyTicketsPage: React.FC = () => {
             
             <button
               id="tab-tickets-past"
-              onClick={() => setActiveTab('utilise')}
+              onClick={() => setActiveTab('historique')}
               className={`flex-1 text-center pb-2.5 text-xs font-semibold tracking-wide border-b-2 transition-all cursor-pointer ${
-                activeTab === 'utilise'
+                activeTab === 'historique'
                   ? 'border-orange-500 text-orange-600 dark:text-orange-400 font-bold'
                   : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
-              Historique ({userTickets.filter((t) => t.status === 'utilise').length})
+              Historique ({userTickets.filter((t) => t.status !== 'valide').length})
             </button>
           </div>
         )}
@@ -108,7 +110,7 @@ export const MyTicketsPage: React.FC = () => {
             <div className="w-full max-w-xs mt-6 space-y-2.5">
               <button
                 id="btn-buy-ticket-empty-state"
-                onClick={() => openAuthModal('Connectez-vous ou créez un compte acheteur pour acheter votre premier ticket.')}
+                onClick={() => openAuthModal('GENERAL')}
                 className="w-full py-3.5 px-5 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-orange-500/25 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 <Ticket className="w-4 h-4" />

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { api } from '../services/apiClient';
 import { parseApiError } from '../utils/apiErrors';
+import { ScanneurAssignment } from '../types';
 import jsQR from 'jsqr';
 import { 
   ChevronLeft, 
@@ -23,13 +24,10 @@ export const ScannerPage: React.FC = () => {
   const navigate = useNavigate();
   const { 
     user, 
-    currentPersona, 
-    events, 
-    tickets, 
-    scanneurAssignments, 
-    scanTicketWithSecurity, 
-    scanLogs 
+    events 
   } = useApp();
+
+  const [apiAssignments, setApiAssignments] = useState<ScanneurAssignment[]>([]);
 
   const [scanning, setScanning] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
@@ -48,12 +46,25 @@ export const ScannerPage: React.FC = () => {
     scanned_by_nom: string;
   }[]>([]);
 
-  // Find events where user is assigned or default to Vital'O FC
-  const userAssignments = scanneurAssignments.filter(
-    (a) => a.actif && (a.user_id === user.id || a.user_telephone === user.phone || user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN')
+  // Assignations issues du backend (GET /api/organisateurs/mon-profil/ + getScanneurs)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const prof = await api.organisateurs.getMonProfil();
+        const scans = await api.organisateurs.getScanneurs(prof.id);
+        if (!cancelled && scans && scans.results) setApiAssignments(scans.results);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const isOrganizerOrSuper = user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN';
+  const userAssignments = apiAssignments.filter(
+    (a) => a.user_id === user.id || a.user_telephone === user.phone
   );
 
-  const defaultEventId = userAssignments[0]?.event_id || '';
+  const defaultEventId = (isOrganizerOrSuper ? events[0]?.id : userAssignments[0]?.event_id) || '';
   const [selectedEventId, setSelectedEventId] = useState<string>(defaultEventId);
   const [inputCode, setInputCode] = useState('');
   const [lastScanResult, setLastScanResult] = useState<{
@@ -64,9 +75,16 @@ export const ScannerPage: React.FC = () => {
   } | null>(null);
 
   const selectedEvent = events.find((e) => e.id === selectedEventId);
-  const isAssignedToSelectedEvent = scanneurAssignments.some(
-    (a) => a.event_id === selectedEventId && a.actif && (a.user_id === user.id || a.user_telephone === user.phone)
-  ) || user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN';
+
+  useEffect(() => {
+    const target = isOrganizerOrSuper ? events[0]?.id : userAssignments[0]?.event_id;
+    if (target && selectedEventId !== target) setSelectedEventId(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiAssignments, events, isOrganizerOrSuper]);
+
+  const isAssignedToSelectedEvent = isOrganizerOrSuper || userAssignments.some(
+    (a) => a.event_id === selectedEventId
+  );
 
   // Journal des scans depuis /api/organisateurs/events/{id}/logs-scan/ (Section 3.D)
   useEffect(() => {
@@ -128,12 +146,14 @@ export const ScannerPage: React.FC = () => {
         });
       }
     } catch (err: any) {
-      if (err instanceof TypeError) {
-        // Backend injoignable → repli sur la validation locale (mode hors-ligne)
-        const local = scanTicketWithSecurity(code, selectedEventId);
-        setLastScanResult(local);
+      const parsed = parseApiError(err);
+      if (parsed.code === 'backend_indisponible') {
+        setLastScanResult({
+          success: false,
+          message: 'Backend indisponible : validation impossible pour le moment.',
+          reason: 'La validation des billets exige une connexion au serveur IwacuTix. Réessayez dans quelques secondes.',
+        });
       } else {
-        const parsed = parseApiError(err);
         setLastScanResult({
           success: false,
           message: parsed.message,
@@ -378,7 +398,7 @@ export const ScannerPage: React.FC = () => {
                 type="text"
                 value={inputCode}
                 onChange={(e) => setInputCode(e.target.value)}
-                placeholder="Ex: ITX-9812-A3..."
+                placeholder="Collez le code brut du QR (uuid.signature)…"
                 onKeyDown={(e) => e.key === 'Enter' && handleScan()}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-brand-primary"
               />
@@ -399,8 +419,6 @@ export const ScannerPage: React.FC = () => {
             className={`p-4 rounded-xl border animate-in zoom-in-95 duration-150 ${
               lastScanResult.success
                 ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
-                : lastScanResult.reason?.includes('autre événement')
-                ? 'bg-amber-50 border-amber-300 text-amber-950'
                 : 'bg-red-50 border-red-300 text-red-950'
             }`}
           >
@@ -447,12 +465,12 @@ export const ScannerPage: React.FC = () => {
               Journal des Scans en temps réel (ScanLog)
             </span>
             <span className="text-[10px] font-mono text-slate-400">
-              {scanLogs.length} entrée(s)
+              {apiScanLogs.length} entrée(s)
             </span>
           </div>
 
           <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
-            {[...apiScanLogs, ...scanLogs].map((log) => (
+            {apiScanLogs.map((log) => (
               <div key={log.id} className="p-2.5 text-xs flex items-start justify-between gap-2">
                 <div className="space-y-0.5 min-w-0">
                   <div className="flex items-center gap-1.5">

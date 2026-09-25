@@ -7,25 +7,20 @@ import {
   ShieldCheck, 
   UploadCloud, 
   Mail, 
-  Smartphone, 
   CheckCircle2, 
   AlertCircle, 
   ArrowRight, 
   FileText, 
   Building2, 
   User as UserIcon, 
-  Lock, 
   ChevronLeft,
-  Sparkles,
-  QrCode,
-  TrendingUp,
-  Image as ImageIcon,
+  Clock,
   Info
 } from 'lucide-react';
 
 export const OrganizerKycPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, submitOrganizerKyc, updateUserProfile } = useApp();
+  const { user, updateUserProfile } = useApp();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -40,10 +35,11 @@ export const OrganizerKycPage: React.FC = () => {
 
   
   // Email & OTP states
-  const [email, setEmail] = useState(user.email || '');
+  const [email, setEmail] = useState(user.email && user.email !== 'contact@iwacutix.bi' ? user.email : '');
   const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [emailOtpCode, setEmailOtpCode] = useState('');
   const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -84,6 +80,25 @@ export const OrganizerKycPage: React.FC = () => {
     setStep(2);
   };
 
+  const handleSaveEmail = async () => {
+    setErrorMsg('');
+    if (!email.trim()) {
+      setErrorMsg('Veuillez renseigner une adresse email valide.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const profil = await api.organisateurs.updateMonProfil({ email: email.trim() });
+      if (profil && profil.email) setEmail(profil.email);
+      setErrorMsg('');
+    } catch (err) {
+      const { message } = parseApiError(err);
+      setErrorMsg(message || 'Impossible de mettre à jour l\'adresse email.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSendEmailOtp = async () => {
     setErrorMsg('');
     setIsSubmitting(true);
@@ -94,8 +109,8 @@ export const OrganizerKycPage: React.FC = () => {
     } catch (err) {
       const { message, code: apiCode } = parseApiError(err);
       if (apiCode === 'email_absent') {
-        setErrorMsg('Aucune adresse email sur votre profil organisateur. Ajoutez une adresse email valide avant de continuer.');
-      } else if (apiCode === 'TOO_MANY_REQUESTS' || /429|trop|reessayez/i.test(message || '')) {
+        setErrorMsg('Aucune adresse email sur votre profil organisateur. Ajoutez une adresse email valide ci-dessus puis re-tentez l\'envoi.');
+      } else if (apiCode === 'tentatives_epuisees') {
         setErrorMsg('Trop de demandes récentes. Veuillez réessayer dans quelques minutes.');
       } else {
         setErrorMsg(message || 'Impossible d\'envoyer le code de vérification. Réessayez.');
@@ -128,7 +143,7 @@ export const OrganizerKycPage: React.FC = () => {
         setEmailOtpSent(false);
       } else if (apiCode === 'code_invalide') {
         setErrorMsg(message || 'Code invalide. Vérifiez le code reçu par email.');
-      } else if (apiCode === 'TOO_MANY_REQUESTS' || /429|trop|reessayez/i.test(message || '')) {
+      } else if (apiCode === 'tentatives_epuisees') {
         setErrorMsg('Trop de tentatives échouées. Demandez un nouveau code plus tard.');
         setEmailOtpSent(false);
       } else {
@@ -140,46 +155,34 @@ export const OrganizerKycPage: React.FC = () => {
   };
 
   const handleFinalActivation = async () => {
-    const submitLocal = () => {
-      submitOrganizerKyc({
-        nomLegal: nomLegal.trim(),
-        numeroCni: numeroCni.trim(),
-        email: email.trim(),
-        cniRectoUrl,
-        cniVersoUrl,
-        structureName: structureName.trim() || nomLegal.trim()
-      });
-      navigate('/organisateur');
-    };
-
     setIsSubmitting(true);
     setErrorMsg('');
 
-    // Soumission réelle d'une demande d'adhésion organisateur (multipart) côté backend
     try {
       const file = cniRectoFile;
       if (!file) {
-        setErrorMsg('Veuillez sélectionner la photo de votre CNI avant de soumettre.');
+        setErrorMsg('Veuillez sélectionner la photo recto de votre CNI avant de soumettre.');
         setIsSubmitting(false);
         return;
       }
       const demande = await api.organisateurs.soumettreDemande({
         nom_entreprise: structureName.trim() || nomLegal.trim(),
         nom_structure: structureName.trim() || undefined,
-        justification: `Demande d'adhésion organisateur IwacuTix - ${nomLegal.trim()}`,
+        justification: `Demande d'adhésion organisateur IwacuTix - ${nomLegal.trim()} - CNI ${numeroCni.trim()}`,
         document_verification: file,
       });
 
       if (demande && (demande.statut === 'REJETE_AUTO' || demande.statut === 'REJETE')) {
-        setErrorMsg(demande.motif_rejet || 'Votre demande a été rejetée automatiquement. Vérifiez vos documents (CNI illisible).');
+        setErrorMsg(demande.motif_rejet || 'Votre demande a été rejetée. Vérifiez vos documents (CNI illisible) et soumettez une nouvelle demande.');
         setStep(1);
         return;
       }
 
-      submitLocal();
-    } catch {
-      // Backend indisponible → activation locale démo conservée
-      submitLocal();
+      // Demande acceptée en file d'attente de contrôle → écran « en attente de validation »
+      setSubmitted(true);
+    } catch (err) {
+      const { message } = parseApiError(err);
+      setErrorMsg(message || 'Demande non soumise : backend momentanément indisponible. Réessayez dans quelques secondes.');
     } finally {
       setIsSubmitting(false);
     }
@@ -406,24 +409,32 @@ export const OrganizerKycPage: React.FC = () => {
                     <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="email"
-                      value={email || user.email || ''}
-                      readOnly
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       placeholder="votre-email@domaine.com"
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium bg-slate-50 text-slate-500 outline-none cursor-not-allowed"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none"
                     />
                   </div>
                   <button
                     type="button"
+                    onClick={() => void handleSaveEmail()}
+                    disabled={isSubmitting}
+                    className="px-3 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                  >
+                    {isSubmitting ? '...' : 'Enregistrer'}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void handleSendEmailOtp()}
                     disabled={isSubmitting}
-                    className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                    className="px-4 py-2.5 bg-brand-primary text-white rounded-xl text-xs font-bold hover:bg-orange-700 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
                   >
                     {isSubmitting ? 'Envoi...' : emailOtpSent ? 'Renvoyer le code' : 'Envoyer le code'}
                   </button>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
                   <Info className="w-3 h-3" />
-                  Si votre profil n'a pas d'adresse email, mettez-la à jour avant de continuer.
+                  Enregistrez d'abord votre email si le profil n'en contient pas, puis envoyez le code.
                 </p>
               </div>
 
@@ -471,67 +482,74 @@ export const OrganizerKycPage: React.FC = () => {
           </div>
         )}
 
-        {/* STEP 3: ACTIVATION & PRIVILEGES */}
-        {step === 3 && (
+        {/* STEP 3: EMAIL VERIFIED → SUBMIT DEMANDE / SENT */}
+        {step === 3 && !submitted && (
           <div className="space-y-4 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm text-center">
             <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-8 h-8" />
+              <Mail className="w-7 h-7" />
             </div>
 
             <div className="space-y-1">
               <h2 className="text-lg font-display font-extrabold text-slate-900">
-                Vérification KYC Réussie avec Succès !
+                Vérification de votre email réussie !
               </h2>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Votre identité a été certifiée. Votre compte est désormais titulaire des pleins droits d'Organisateur sur la plateforme IwacuTix.
+                Votre email organisateur est vérifié. Vous pouvez maintenant soumettre votre demande d'adhésion afin que l'équipe IwacuTix valide vos documents (CNI).
               </p>
             </div>
 
-            {/* Privileges summary */}
-            <div className="text-left bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
+            {/* Demande summary */}
+            <div className="text-left bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2.5">
               <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
-                Privilèges débloqués et rattachés à votre nom
+                Récapitulatif de la demande
               </span>
-
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-orange-100 text-brand-primary flex items-center justify-center shrink-0 mt-0.5">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">Publication d'Événements & Billets</h4>
-                  <p className="text-[11px] text-slate-500">Créez vos événements avec catégories de billets, prix en FBu et encaissement Lumicash/EcoCash/Blink.</p>
-                </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Structure / Nom légal</span>
+                <span className="font-bold text-slate-900">{structureName.trim() || nomLegal.trim()}</span>
               </div>
-
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
-                  <TrendingUp className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">Gestion des Statistiques en Direct</h4>
-                  <p className="text-[11px] text-slate-500">Visualisez et gérez exclusivement les statistiques des événements rattachés à votre nom.</p>
-                </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">CNI</span>
+                <span className="font-bold text-slate-900 font-mono">{numeroCni.trim()}</span>
               </div>
-
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 mt-0.5">
-                  <QrCode className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">Création des Scanneurs de Billets</h4>
-                  <p className="text-[11px] text-slate-500">Habilitez votre personnel de sécurité pour scanner et composter les tickets à l'entrée.</p>
-                </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">Email vérifié</span>
+                <span className="font-bold text-emerald-700">{email.trim() || user.email || '-'}</span>
               </div>
             </div>
 
-            {/* Final Action */}
             <button
               id="btn-activate-organizer-profile"
               onClick={() => void handleFinalActivation()}
               disabled={isSubmitting}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 disabled:opacity-60 disabled:cursor-wait text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25 active:scale-95 transition-all cursor-pointer"
             >
-              <span>{isSubmitting ? 'Soumission de votre demande...' : 'Accéder à mon Espace Organisateur'}</span>
+              <span>{isSubmitting ? 'Soumission de votre demande...' : 'Soumettre ma demande Organisateur'}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* STEP 3b: DEMANDE SOUMISE — EN ATTENTE DE VALIDATION */}
+        {step === 3 && submitted && (
+          <div className="space-y-4 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm text-center">
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+              <Clock className="w-7 h-7" />
+            </div>
+
+            <div className="space-y-1">
+              <h2 className="text-lg font-display font-extrabold text-slate-900">
+                Demande soumise — en attente de validation
+              </h2>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Votre demande d'adhésion organisateur (<strong className="text-slate-700">{structureName.trim() || nomLegal.trim()}</strong>) est en cours d'examen par l'équipe IwacuTix. Vous serez notifié dès qu'elle sera approuvée.
+              </p>
+            </div>
+
+            <button
+              onClick={() => navigate('/organisateur')}
+              className="w-full py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              Retour à l'Espace Organisateur
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

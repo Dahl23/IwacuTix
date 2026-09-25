@@ -68,7 +68,6 @@ export const TicketSelectionPage: React.FC = () => {
       }
     });
 
-    // If visitor has not created an account yet, obligate account creation & OTP verification
     if (!isUserVerified) {
       openAuthModal('RESERVATION');
       return;

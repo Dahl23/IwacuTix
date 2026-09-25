@@ -1,5 +1,5 @@
 export type UserRole = 'ACHETEUR' | 'ORGANISATEUR' | 'SUPERADMIN';
-export type UserAccountStatus = 'ACTIF' | 'SUSPENDU' | 'EN_ATTENTE_VERIFICATION' | 'DESACTIVE';
+export type UserAccountStatus = 'ACTIF' | 'SUSPENDU' | 'DESACTIVE';
 
 export interface OrganisateurProfile {
   user_id: string;
@@ -33,7 +33,6 @@ export interface User {
   statut_compte: UserAccountStatus;
   telephone_verifie: boolean;
   email_verifie?: boolean;
-  activeAssignmentEventId?: string; // Capacité de scan sur un événement précis
   organisateurProfile?: OrganisateurProfile;
   kycOrganisateur?: OrganisateurKyc;
 }
@@ -133,7 +132,7 @@ export interface CartItem {
 }
 
 export interface TicketPurchased {
-  id: string; // e.g., "BTK-4921-X9"
+  id: string; // uuid du billet (partie "uuid" du QR "uuid.signature")
   eventId: string;
   eventTitle: string;
   eventCategory: string;
@@ -143,9 +142,9 @@ export interface TicketPurchased {
   categoryName: string;
   price: number;
   qrCodeValue: string;
-  qr_code_hash?: string; // HMAC/JWT signature cryptographique
+  qr_code_hash?: string; // contenu brut du QR : "uuid.signature" (base64url)
   purchaseDate: string;
-  status: 'valide' | 'utilise';
+  status: 'valide' | 'utilise' | 'annule';
   phoneUsed?: string;
   paymentMethod?: string;
   isGift?: boolean;

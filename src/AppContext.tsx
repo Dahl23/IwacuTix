@@ -5,11 +5,9 @@ import {
   User, 
   Event, 
   AppNotification, 
-  ScanneurAssignment, 
   PortefeuilleOrganisateur, 
   ParametrePlateforme, 
   Versement, 
-  ScanLog,
   ApiDestinataireBillet
 } from './types';
 import { api, API_BASE_URL, getStoredAccessToken, clearStoredTokens } from './services/apiClient';
@@ -26,14 +24,8 @@ export interface OrderDraft {
   event_id: string;
   tier_id: string;
   quantite: number;
+  telephone?: string;
   destinataires?: ApiDestinataireBillet[];
-}
-
-export interface ScanResult {
-  success: boolean;
-  message: string;
-  ticket?: TicketPurchased;
-  reason?: string;
 }
 
 export interface PlatformKycEntry {
@@ -66,8 +58,6 @@ interface AppContextType {
   removeFromCart: (eventId: string, categoryName: string) => void;
   clearCart: () => void;
   addEvent: (newEvent: Event) => void;
-  scanTicket: (ticketId: string) => void;
-  scanTicketWithSecurity: (ticketCodeOrId: string, targetEventId: string) => ScanResult;
   notifications: AppNotification[];
   followedEventIds: string[];
   followEvent: (eventId: string) => void;
@@ -76,11 +66,6 @@ interface AppContextType {
   markAllNotificationsAsRead: () => void;
   publishOrganizerUpdate: (eventId: string, message: string) => void;
   
-  // Scanneur staff management (Section 4 du cahier des charges)
-  scanneurAssignments: ScanneurAssignment[];
-  assignScanneur: (userNom: string, userPhone: string, eventId: string) => void;
-  removeScanneurAssignment: (assignmentId: string) => void;
-
   // Organisateur portefeuilles (Section 5 & 6.E)
   portefeuille: PortefeuilleOrganisateur;
 
@@ -90,9 +75,6 @@ interface AppContextType {
   organisateursKyc: PlatformKycEntry[];
   updateOrganisateurKyc: (id: string, statut: 'VERIFIE' | 'REJETE') => void;
   versements: Versement[];
-
-  // Scan logs (Section 5 & 8)
-  scanLogs: ScanLog[];
 
   // Profile update and user management
   setUser: React.Dispatch<React.SetStateAction<User>>;
@@ -106,16 +88,7 @@ interface AppContextType {
   openAuthModal: (reason?: 'RESERVATION' | 'ORGANISATEUR' | 'GENERAL') => void;
   closeAuthModal: () => void;
 
-  // KYC Verification for Organizers
-  submitOrganizerKyc: (kycData: {
-    nomLegal: string;
-    numeroCni: string;
-    email: string;
-    cniRectoUrl: string;
-    cniVersoUrl: string;
-    structureName?: string;
-  }) => void;
-
+  // KYC Verification for Organizers (transmis via /api/organisateurs/demandes/)
   // Dark mode & Theme
   themeMode: 'light' | 'dark' | 'system';
   isDarkMode: boolean;
@@ -220,7 +193,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const saved = localStorage.getItem('iwacutix_user_profile');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // User must be a real registered account (register/login flow, plus de vérification OTP téléphone obligatoire)
+        // User must be a real registered account (register/login flow)
         if (parsed && parsed.id && parsed.id !== 'guest' && parsed.role && parsed.statut_compte === 'ACTIF') {
           if (!parsed.avatarUrl || parsed.avatarUrl.includes('photo-1534528741775-53994a69daeb')) {
             parsed.avatarUrl = DEFAULT_ANONYMOUS_AVATAR;
@@ -349,8 +322,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tous');
 
-  // Multi-tenant & staff states
-  const [scanneurAssignments, setScanneurAssignments] = useState<ScanneurAssignment[]>([]);
+  // Multi-tenant states
   const [portefeuille] = useState<PortefeuilleOrganisateur>({
     organisateur_id: '',
     nom_structure: '',
@@ -369,7 +341,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
   const [organisateursKyc, setOrganisateursKyc] = useState<PlatformKycEntry[]>([]);
   const [versements, setVersements] = useState<Versement[]>([]);
-  const [scanLogs, setScanLogs] = useState<ScanLog[]>([]);
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [followedEventIds, setFollowedEventIds] = useState<string[]>([]);
@@ -381,29 +352,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
     setCurrentPersona(persona);
-    if (persona === 'ACHETEUR') {
-      if (!isUserVerified) {
-        setUser(GUEST_USER);
-      } else {
-        setUser((prev) => ({ ...prev, role: 'ACHETEUR' }));
-      }
-    } else if (persona === 'ORGANISATEUR') {
-      setUser((prev) => ({
-        ...prev,
-        role: 'ORGANISATEUR',
-        organisateurProfile: prev.organisateurProfile || {
-          user_id: prev.id,
-          nom_structure: prev.name ? `${prev.name} Productions` : "Vital'O Football Club Burundi",
-          numero_mobile_money_reception: prev.phone || '+257 79 100 200',
-          statut_verification: 'EN_ATTENTE',
-          commission_taux: 5,
-        }
-      }));
-    } else if (persona === 'SCANNEUR') {
-      setUser((prev) => ({ ...prev }));
-    } else if (persona === 'SUPERADMIN') {
-      setUser((prev) => ({ ...prev }));
-    }
   };
 
   const addToCart = (eventId: string, eventTitle: string, categoryName: string, quantity: number, price: number, tierId?: string) => {
@@ -451,163 +399,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setEvents((prev) => [newEvent, ...prev]);
   };
 
-  const scanTicket = (ticketId: string) => {
-    setTickets((prev) =>
-      prev.map((t) => (t.id === ticketId ? { ...t, status: 'utilise' } : t))
-    );
-  };
-
-  // Section 4 & 8: Scan atomique avec vérification stricte du ScanneurAssignment
-  const scanTicketWithSecurity = (ticketCodeOrId: string, targetEventId: string): ScanResult => {
-    const cleanedQuery = ticketCodeOrId.trim().toUpperCase();
-
-    // 1. Vérification d'assignation
-    const hasActiveAssignment = scanneurAssignments.some(
-      (asg) => asg.event_id === targetEventId && asg.actif
-    ) || user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN';
-
-    if (!hasActiveAssignment && currentPersona === 'SCANNEUR' && user.activeAssignmentEventId !== targetEventId) {
-      const targetEvent = events.find(e => e.id === targetEventId);
-      const logEntry: ScanLog = {
-        id: `slog-${Date.now()}`,
-        ticket_id: cleanedQuery,
-        event_id: targetEventId,
-        event_titre: targetEvent?.title || 'Événement',
-        scanned_at: 'À l\'instant',
-        scanned_by_nom: user.name,
-        scanned_by_user_id: user.id,
-        statut_validation: 'REJETE',
-        raison_rejet: `Scanneur non assigné à cet événement`
-      };
-      setScanLogs(prev => [logEntry, ...prev]);
-
-      return {
-        success: false,
-        message: 'Accès refusé au poste de scan',
-        reason: `Vous n'avez pas de ScanneurAssignment actif pour cet événement.`
-      };
-    }
-
-    // 2. Recherche du ticket
-    const ticket = tickets.find(
-      (t) => t.id.toUpperCase() === cleanedQuery || 
-             t.qrCodeValue.toUpperCase().includes(cleanedQuery) ||
-             (t.qr_code_hash && t.qr_code_hash.includes(cleanedQuery))
-    );
-
-    if (!ticket) {
-      const logEntry: ScanLog = {
-        id: `slog-${Date.now()}`,
-        ticket_id: cleanedQuery,
-        event_id: targetEventId,
-        event_titre: 'Événement',
-        scanned_at: 'À l\'instant',
-        scanned_by_nom: user.name,
-        scanned_by_user_id: user.id,
-        statut_validation: 'REJETE',
-        raison_rejet: 'Billet introuvable / Code invalide'
-      };
-      setScanLogs(prev => [logEntry, ...prev]);
-
-      return {
-        success: false,
-        message: 'Billet introuvable',
-        reason: 'Le code scanné ne correspond à aucun billet officiel émis par IwacuTix.'
-      };
-    }
-
-    // 3. Vérification que le billet appartient bien à cet événement
-    if (ticket.eventId !== targetEventId) {
-      const logEntry: ScanLog = {
-        id: `slog-${Date.now()}`,
-        ticket_id: ticket.id,
-        event_id: targetEventId,
-        event_titre: ticket.eventTitle,
-        scanned_at: 'À l\'instant',
-        scanned_by_nom: user.name,
-        scanned_by_user_id: user.id,
-        statut_validation: 'REJETE',
-        raison_rejet: `Billet d'un autre événement : "${ticket.eventTitle}"`,
-        tier_name: ticket.categoryName
-      };
-      setScanLogs(prev => [logEntry, ...prev]);
-
-      return {
-        success: false,
-        message: 'Billet d\'un autre événement',
-        reason: `Ce billet est valable pour "${ticket.eventTitle}", pas pour cet événement.`
-      };
-    }
-
-    // 4. Vérification anti-double-usage (Section 6.C & 8)
-    if (ticket.status === 'utilise') {
-      const logEntry: ScanLog = {
-        id: `slog-${Date.now()}`,
-        ticket_id: ticket.id,
-        event_id: targetEventId,
-        event_titre: ticket.eventTitle,
-        scanned_at: 'À l\'instant',
-        scanned_by_nom: user.name,
-        scanned_by_user_id: user.id,
-        statut_validation: 'REJETE',
-        raison_rejet: 'Tentative de réutilisation (Billet déjà composté)',
-        tier_name: ticket.categoryName
-      };
-      setScanLogs(prev => [logEntry, ...prev]);
-
-      return {
-        success: false,
-        message: 'ALERTE : Billet déjà utilisé !',
-        reason: 'Ce billet a déjà été validé à l\'entrée. Tentative de double passage interceptée.'
-      };
-    }
-
-    // 5. Validation atomique
-    setTickets((prev) =>
-      prev.map((t) => (t.id === ticket.id ? { ...t, status: 'utilise' } : t))
-    );
-
-    const logEntry: ScanLog = {
-      id: `slog-${Date.now()}`,
-      ticket_id: ticket.id,
-      event_id: targetEventId,
-      event_titre: ticket.eventTitle,
-      scanned_at: 'À l\'instant',
-      scanned_by_nom: user.name,
-      scanned_by_user_id: user.id,
-      statut_validation: 'ACCEPTE',
-      tier_name: ticket.categoryName
-    };
-    setScanLogs(prev => [logEntry, ...prev]);
-
-    return {
-      success: true,
-      message: `Entrée autorisée — ${ticket.categoryName}`,
-      ticket
-    };
-  };
-
-  // Assignation d'un scanneur par l'organisateur (Section 4)
-  const assignScanneur = (userNom: string, userPhone: string, eventId: string) => {
-    const targetEvent = events.find(e => e.id === eventId);
-    const newAssignment: ScanneurAssignment = {
-      id: `asg-${Date.now()}`,
-      user_id: `usr-scan-${Date.now()}`,
-      user_nom: userNom,
-      user_telephone: userPhone.startsWith('+257') ? userPhone : `+257 ${userPhone}`,
-      event_id: eventId,
-      event_titre: targetEvent?.title || 'Événement',
-      assigne_par: user.name,
-      date_assignation: 'À l\'instant',
-      actif: true
-    };
-    setScanneurAssignments(prev => [newAssignment, ...prev]);
-  };
-
-  const removeScanneurAssignment = (assignmentId: string) => {
-    setScanneurAssignments(prev => prev.filter(a => a.id !== assignmentId));
-  };
-
   const updateParametrePlateforme = (params: Partial<ParametrePlateforme>) => {
     setParametrePlateforme({
       ...parametrePlateforme,
@@ -618,49 +409,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const updateOrganisateurKyc = (id: string, statut: 'VERIFIE' | 'REJETE') => {
     setOrganisateursKyc(prev => prev.map(org => org.id === id ? { ...org, statut_verification: statut } : org));
-  };
-
-  const submitOrganizerKyc = (kycData: {
-    nomLegal: string;
-    numeroCni: string;
-    email: string;
-    cniRectoUrl: string;
-    cniVersoUrl: string;
-    structureName?: string;
-  }) => {
-    const updatedUser: User = {
-      ...user,
-      name: kycData.nomLegal,
-      email: kycData.email,
-      role: 'ORGANISATEUR',
-      statut_compte: 'ACTIF',
-      telephone_verifie: true,
-      organisateurProfile: {
-        user_id: user.id,
-        nom_structure: kycData.structureName || kycData.nomLegal,
-        numero_mobile_money_reception: user.phone,
-        adresse_lightning_reception: user.organisateurProfile?.adresse_lightning_reception || '',
-        statut_verification: 'EN_ATTENTE',
-        commission_taux: 5,
-      }
-    };
-    setUser(updatedUser);
-    setCurrentPersona('ORGANISATEUR');
-
-    // Also register into organisateursKyc list for platform transparency
-    setOrganisateursKyc(prev => [
-      {
-        id: user.id,
-        nom_structure: kycData.structureName || kycData.nomLegal,
-        responsable: kycData.nomLegal,
-        telephone: user.phone,
-        email: kycData.email,
-        statut_verification: 'EN_ATTENTE' as const,
-        commission_taux: 5,
-        moyens: [`Mobile Money (${user.phone})`]
-      },
-      ...prev
-    ]);
   };
 
   const followEvent = (eventId: string) => {
@@ -751,8 +499,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         removeFromCart,
         clearCart,
         addEvent,
-        scanTicket,
-        scanTicketWithSecurity,
         notifications,
         followedEventIds,
         followEvent,
@@ -760,17 +506,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addNotification,
         markAllNotificationsAsRead,
         publishOrganizerUpdate,
-        scanneurAssignments,
-        assignScanneur,
-        removeScanneurAssignment,
         portefeuille,
         parametrePlateforme,
         updateParametrePlateforme,
         organisateursKyc,
         updateOrganisateurKyc,
         versements,
-        scanLogs,
-        submitOrganizerKyc,
         themeMode,
         isDarkMode,
         setThemeMode,

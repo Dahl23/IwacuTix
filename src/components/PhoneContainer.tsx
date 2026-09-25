@@ -190,7 +190,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                             ? 'bg-indigo-100 text-indigo-700' 
                             : 'bg-emerald-100 text-emerald-800'
                         }`}>
-                          {!isUserVerified ? 'Numéro non vérifié' : isOrganizer ? 'Compte Organisateur' : 'Acheteur Vérifié ✓'}
+                          {!isUserVerified ? 'Compte Invité' : isOrganizer ? 'Compte Organisateur' : 'Acheteur Vérifié ✓'}
                         </span>
                       </div>
                     </div>
@@ -415,7 +415,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                 <IwacuTixLogo size="md" theme="dark" showTagline={false} />
               </div>
               <p className="text-xs text-slate-400 leading-relaxed font-normal">
-                <strong className="text-white font-bold">IwacuTix</strong> — Tes tickets, tes événements. La billetterie digitale et mobile de nouvelle génération au Burundi. Achetez vos tickets instantanément via Lumicash, EcoCash ou Bancobu et vibrez au rythme des meilleurs concerts, festivals, matchs et spectacles.
+                <strong className="text-white font-bold">IwacuTix</strong> — Tes tickets, tes événements. La billetterie digitale et mobile de nouvelle génération au Burundi. Achetez vos tickets instantanément via Lumicash ou Bitcoin Lightning (Blink) et vibrez au rythme des meilleurs concerts, festivals, matchs et spectacles.
               </p>
             </div>
 
@@ -619,7 +619,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
       {/* ================= FLOATING PWA INSTALL BUTTON (BOTTOM-LEFT ON ALL PAGES) ================= */}
       <PWAInstallButton variant="floating" />
 
-      {/* ================= GLOBAL AUTH MODAL (OTP SMS VERIFICATION FOR BUYERS & ORGANIZERS) ================= */}
+      {/* ================= GLOBAL AUTH MODAL (REGISTER & LOGIN IDENTIFIANT + MOT DE PASSE) ================= */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={closeAuthModal}

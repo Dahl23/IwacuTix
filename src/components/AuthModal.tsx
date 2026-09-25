@@ -6,7 +6,6 @@ import {
   CheckCircle2, 
   ShieldCheck, 
   AlertCircle,
-  Building2,
   Sparkles,
   Info,
   Mail
@@ -20,7 +19,7 @@ import type { ApiUser, UserRole } from '../types';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  defaultTab?: 'ACHETEUR' | 'ORGANISATEUR';
+  initialMode?: 'REGISTER' | 'LOGIN';
   contextReason?: 'RESERVATION' | 'ORGANISATEUR' | 'GENERAL';
   onSuccess?: () => void;
 }
@@ -30,16 +29,13 @@ type AuthMode = 'REGISTER' | 'LOGIN';
 export const AuthModal: React.FC<AuthModalProps> = ({ 
   isOpen, 
   onClose, 
-  defaultTab = 'ACHETEUR',
+  initialMode = 'REGISTER',
   contextReason = 'GENERAL',
   onSuccess
 }) => {
   const navigate = useNavigate();
-  const { user, setUser, updateUserProfile, switchPersona } = useApp();
-  const [tab, setTab] = useState<'ACHETEUR' | 'ORGANISATEUR'>(
-    contextReason === 'ORGANISATEUR' ? 'ACHETEUR' : defaultTab
-  );
-  const [mode, setMode] = useState<AuthMode>('REGISTER');
+  const { user, setUser, updateUserProfile } = useApp();
+  const [mode, setMode] = useState<AuthMode>(initialMode);
 
   // Register state
   const [nomComplet, setNomComplet] = useState(user.name && user.id !== 'guest' ? user.name : '');
@@ -47,6 +43,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [username, setUsername] = useState(user.username || '');
   const [phone, setPhone] = useState(user.phone || '');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   // Login state
   const [identifiant, setIdentifiant] = useState('');
@@ -61,6 +58,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   if (!isOpen) return null;
 
   const hasAnyIdentifier = email.trim().length > 0 || phone.trim().length > 0 || username.trim().length > 0;
+  const passwordMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
 
   const handleClose = () => {
     setError(null);
@@ -86,8 +84,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       } else if (contextReason === 'RESERVATION') {
         navigate('/paiement');
       } else if (contextReason === 'ORGANISATEUR') {
-        switchPersona('ORGANISATEUR');
         navigate('/organisateur');
+      } else {
+        navigate('/home');
       }
     }, 800);
   };
@@ -106,6 +105,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setError('Veuillez choisir un mot de passe.');
       return;
     }
+    if (newPassword.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Les deux mots de passe ne correspondent pas.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -114,7 +121,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         username: username.trim() || undefined,
         telephone: phone.trim() || undefined,
         password: newPassword,
-        nom_complet: nomComplet.trim() || 'Acheteur IwacuTix',
+        nom_complet: nomComplet.trim() || undefined,
       });
       setStoredTokens(res.access, res.refresh);
       applyUser(res.user);
@@ -212,32 +219,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </p>
           </div>
         )}
-
-        {/* Tab switcher */}
-        <div className="p-2.5 bg-slate-50 dark:bg-brand-dark border-b border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-2">
-          <button
-            onClick={() => { setTab('ACHETEUR'); setError(null); }}
-            className={`py-2 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              tab === 'ACHETEUR'
-                ? 'bg-white dark:bg-brand-slate text-slate-900 dark:text-white shadow-sm border border-slate-200 dark:border-slate-700'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
-          >
-            <Building2 className="w-3.5 h-3.5 text-brand-primary" />
-            Acheteur
-          </button>
-          <button
-            onClick={() => { setTab('ORGANISATEUR'); setError(null); }}
-            className={`py-2 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              tab === 'ORGANISATEUR'
-                ? 'bg-white dark:bg-brand-slate text-slate-900 dark:text-white shadow-sm border border-slate-200 dark:border-slate-700'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
-          >
-            <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-            Pro (Organisateur)
-          </button>
-        </div>
 
         {/* Content area */}
         <div className="p-4 sm:p-5 flex-1 overflow-y-auto space-y-3.5">
@@ -341,9 +322,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </p>
               </div>
 
+              {/* Confirmer le mot de passe */}
+              <div className="space-y-1 text-left">
+                <label className="text-[11px] font-bold text-slate-700">Confirmer le mot de passe</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                />
+                <p className="text-[10px] text-slate-400">
+                  Saisissez à nouveau le même mot de passe pour confirmation.
+                </p>
+                {passwordMismatch && (
+                  <p className="text-[10px] font-bold text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    Les deux mots de passe ne correspondent pas.
+                  </p>
+                )}
+              </div>
+
               <button
                 type="submit"
-                disabled={loading || !newPassword.trim()}
+                disabled={loading || !newPassword.trim() || passwordMismatch}
                 className="w-full py-3 bg-brand-primary hover:bg-orange-600 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-primary/20 disabled:opacity-50 cursor-pointer active:scale-95"
               >
                 {loading ? 'Création en cours...' : 'Créer mon compte'}

@@ -158,7 +158,6 @@ export const CreateEventPage: React.FC = () => {
       return;
     }
 
-    const eventId = `evt-custom-${Date.now()}`;
     const finalImage = uploadFile
       ? uploadPreview
       : (customImageUrl.trim() ? customImageUrl.trim() : selectedImage);
@@ -173,7 +172,7 @@ export const CreateEventPage: React.FC = () => {
     const capitalizedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
 
     const newEvent: Event = {
-      id: eventId,
+      id: '',
       title: title.trim(),
       description: description.trim() || 'Aucune description disponible pour cet événement.',
       category,
@@ -189,7 +188,6 @@ export const CreateEventPage: React.FC = () => {
 
     setIsCreating(true);
 
-    // Publication réelle côté backend : création (BROUILLON) → tiers → médias → PUBLIE
     try {
       const created = await api.events.createEvent({
         titre: title.trim(),
@@ -215,6 +213,8 @@ export const CreateEventPage: React.FC = () => {
         });
       }
 
+      let mediaWarning: string | null = null;
+
       // Upload réel photo/vidéo si fichier sélectionné, sinon URL/preset
       if (uploadFile) {
         try {
@@ -223,28 +223,34 @@ export const CreateEventPage: React.FC = () => {
           fd.append('type_media', detectMediaType(uploadFile));
           fd.append('fichier', uploadFile);
           await api.events.addMedia(createdId, fd);
-        } catch {}
-        finally {
+        } catch {
+          mediaWarning = 'L\'événement a été créé, mais la photo/vidéo n\'a pas pu être téléversée.';
+        } finally {
           setUploadingMedia(false);
         }
       } else {
         try {
           await api.events.addMedia(createdId, { type_media: 'IMAGE', url_externe: finalImage });
-        } catch {}
+        } catch {
+          mediaWarning = 'L\'événement a été créé, mais l\'image d\'affiche n\'a pas pu être enregistrée.';
+        }
       }
 
       try {
         await api.events.updateEvent(createdId, { statut: 'PUBLIE' });
-      } catch {}
+      } catch {
+        mediaWarning = mediaWarning || 'L\'événement a été créé mais n\'a pas pu être publié automatiquement. Il reste en brouillon.';
+      }
 
       addEvent({ ...newEvent, id: createdId });
-      alert('Félicitations ! Votre événement a été créé et publié avec succès.');
+      if (mediaWarning) {
+        alert(mediaWarning);
+      } else {
+        alert('Félicitations ! Votre événement a été créé et publié avec succès.');
+      }
       navigate(`/organisateur/dashboard/${createdId}`);
-    } catch {
-      // Backend indisponible / non authentifié → repli local (démo)
-      addEvent(newEvent);
-      alert('Félicitations ! Votre événement a été créé avec succès.');
-      navigate(`/organisateur/dashboard/${eventId}`);
+    } catch (err) {
+      alert('La création de l\'événement a échoué. Vérifiez votre connexion et réessayez.');
     } finally {
       setIsCreating(false);
     }
@@ -276,7 +282,7 @@ export const CreateEventPage: React.FC = () => {
               Pourquoi passer au compte Organisateur ?
             </p>
             <ul className="text-[11px] text-slate-600 space-y-1.5 pl-4 list-disc marker:text-brand-primary">
-              <li>Vendez vos billets instantanément via Lumicash, EcoCash & Bancobu</li>
+              <li>Vendez vos billets instantanément via Lumicash & Bitcoin Lightning (Blink)</li>
               <li>Encaissement direct et tableau de bord financier en temps réel</li>
               <li>Scannez et validez les QR codes de vos participants le jour J</li>
             </ul>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { TicketPurchased } from '../types';
+import { OrganisateurProfilApi, ScanneurAssignment } from '../types';
 import { api } from '../services/apiClient';
 import { MediaGalleryManager } from '../components/MediaGalleryManager';
 import { 
@@ -13,12 +13,9 @@ import {
   Sparkles, 
   Check, 
   Smartphone, 
-  Printer, 
-  ShoppingCart, 
   HelpCircle, 
   Megaphone,
   Wallet,
-  Zap,
   ShieldCheck,
   UserPlus,
   Trash2,
@@ -34,26 +31,17 @@ export const DashboardPage: React.FC = () => {
     user,
     events, 
     tickets, 
-    scanTicket, 
     publishOrganizerUpdate,
-    portefeuille,
-    parametrePlateforme,
-    scanneurAssignments,
-    assignScanneur,
-    removeScanneurAssignment
+    parametrePlateforme
   } = useApp();
 
   const event = events.find((evt) => evt.id === id);
 
-  // Scanner staff assignment state
+  // Scanner staff assignment state (via API)
   const [newScannerName, setNewScannerName] = useState('');
   const [newScannerPhone, setNewScannerPhone] = useState('');
   const [assignSuccess, setAssignSuccess] = useState(false);
-
-  // Simulation states
-  const [showScanner, setShowScanner] = useState(false);
-  const [manualCode, setManualCode] = useState('');
-  const [scanMessage, setScanMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [assignError, setAssignError] = useState(false);
 
   // Organizer announcement update state
   const [updateMessage, setUpdateMessage] = useState('');
@@ -62,6 +50,10 @@ export const DashboardPage: React.FC = () => {
   // Stats réelles chargées depuis l'API (/api/organisateurs/...)
   const [apiLogsStats, setApiLogsStats] = useState<{ total: number; acceptes: number; rejetes: number } | null>(null);
   const [apiSales, setApiSales] = useState<{ nb_ventes: number; total_sats: number } | null>(null);
+
+  // Mon profil organisateur + équipe de scanneurs (backend)
+  const [monProfil, setMonProfil] = useState<OrganisateurProfilApi | null>(null);
+  const [apiScanners, setApiScanners] = useState<ScanneurAssignment[] | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -74,6 +66,12 @@ export const DashboardPage: React.FC = () => {
         const stats = await api.organisateurs.getStats();
         const perEvent = stats.par_evenement.find((e) => e.event__titre === event?.title);
         if (perEvent) setApiSales({ nb_ventes: perEvent.nb_ventes, total_sats: perEvent.total_sats });
+      } catch {}
+      try {
+        const prof = await api.organisateurs.getMonProfil();
+        setMonProfil(prof);
+        const scans = await api.organisateurs.getScanneurs(prof.id);
+        if (scans && scans.results) setApiScanners(scans.results);
       } catch {}
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,24 +127,52 @@ export const DashboardPage: React.FC = () => {
     setTimeout(() => setPublishSuccess(false), 4000);
   };
 
-  const handleAssignScanner = (e: React.FormEvent) => {
+  const handleAssignScanner = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newScannerName.trim() || !newScannerPhone.trim()) return;
 
-    assignScanneur(newScannerName.trim(), newScannerPhone.trim(), event.id);
-    setNewScannerName('');
-    setNewScannerPhone('');
-    setAssignSuccess(true);
-    setTimeout(() => setAssignSuccess(false), 3000);
+    if (!monProfil) {
+      setAssignError(true);
+      setTimeout(() => setAssignError(false), 3000);
+      return;
+    }
+    setAssignError(false);
+    try {
+      await api.organisateurs.assignerScanneur(monProfil.id, {
+        telephone_ou_user_id: newScannerPhone.trim().replace(/^\+257\s*/, '+257').replace(/\s+/g, ''),
+        event_id: event.id,
+      });
+      const scans = await api.organisateurs.getScanneurs(monProfil.id);
+      if (scans && scans.results) setApiScanners(scans.results);
+      setNewScannerName('');
+      setNewScannerPhone('');
+      setAssignSuccess(true);
+      setTimeout(() => setAssignSuccess(false), 3000);
+    } catch {
+      setAssignError(true);
+      setTimeout(() => setAssignError(false), 3000);
+    }
+  };
+
+  const handleRemoveScanner = async (assignmentId: string) => {
+    if (!monProfil) return;
+    try {
+      await api.organisateurs.retirerScanneur(monProfil.id, assignmentId);
+      const scans = await api.organisateurs.getScanneurs(monProfil.id);
+      if (scans && scans.results) setApiScanners(scans.results);
+    } catch {
+      setAssignError(true);
+      setTimeout(() => setAssignError(false), 3000);
+    }
   };
 
   // Filter tickets purchased for this specific event
   const eventTickets = tickets.filter((t) => t.eventId === id);
 
-  // Scanners assigned to this event
-  const eventScanners = scanneurAssignments.filter((a) => a.event_id === event.id && a.actif);
+  // Scanners assignés à cet événement (backend)
+  const eventScanners = (apiScanners ?? []).filter((a) => a.event_id === event.id);
 
-  // Scanned / Attended tickets (local)
+  // Scanned / Attended tickets
   const totalScanned = eventTickets.filter((t) => t.status === 'utilise').length;
 
   // Compute stats (valeurs API prioritaires, repli local sinon)
@@ -155,62 +181,13 @@ export const DashboardPage: React.FC = () => {
   const displaySold = apiSales ? apiSales.nb_ventes : totalTicketsSold;
   const displayScanned = apiLogsStats ? apiLogsStats.acceptes : totalScanned;
 
-  // Calculate potential capacities
-  const totalCapacity = event.ticketCategories.reduce((sum, cat) => sum + cat.available, 0);
+  // Capacité totale configurée (stock_total renvoyé par le backend, sinon stock disponible)
+  const totalCapacity = event.ticketCategories.reduce((sum, cat) => sum + (cat.stockTotal ?? cat.available), 0);
   const salesProgressPercent = totalCapacity > 0 ? Math.round((displaySold / totalCapacity) * 100) : 0;
   const attendancePercent = displaySold > 0 ? Math.round((displayScanned / displaySold) * 100) : 0;
 
   const formatPrice = (price: number) => {
     return `${price.toLocaleString('fr-FR')} FBu`;
-  };
-
-  const handleManualScan = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!manualCode.trim()) return;
-
-    const codeToSearch = manualCode.trim().toUpperCase();
-    const ticketToScan = eventTickets.find(t => t.id === codeToSearch || t.qrCodeValue === codeToSearch);
-
-    if (ticketToScan) {
-      if (ticketToScan.status === 'utilise') {
-        setScanMessage({
-          text: `Erreur: Le billet ${ticketToScan.id} a DÉJÀ été scanné !`,
-          type: 'error'
-        });
-      } else {
-        scanTicket(ticketToScan.id);
-        setScanMessage({
-          text: `Succès ! Billet ${ticketToScan.id} validé (${ticketToScan.recipientName || 'Titulaire'}). Accès AUTORISÉ.`,
-          type: 'success'
-        });
-      }
-    } else {
-      setScanMessage({
-        text: `Code '${codeToSearch}' invalide. Billet introuvable pour cet événement.`,
-        type: 'error'
-      });
-    }
-
-    setManualCode('');
-    setTimeout(() => setScanMessage(null), 5000);
-  };
-
-  const triggerDirectScan = (ticketId: string) => {
-    const t = eventTickets.find(ticket => ticket.id === ticketId);
-    if (!t) return;
-    
-    if (t.status === 'utilise') {
-      alert('Ce billet a déjà été scanné.');
-      return;
-    }
-
-    scanTicket(ticketId);
-    
-    setScanMessage({
-      text: `Scan réussi : Billet ${ticketId} de ${t.isGift ? t.recipientName : 'Titulaire'} validé !`,
-      type: 'success'
-    });
-    setTimeout(() => setScanMessage(null), 3000);
   };
 
   return (
@@ -258,44 +235,32 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* SECTION 5 & 6.E: DOUBLE PORTEFEUILLE ORGANISATEUR */}
+        {/* SECTION 5: COMPTE DE RÉCEPTION DES FONDS ORGANISATEUR */}
         <div className="bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 text-white rounded-2xl p-4 shadow-md space-y-3 border border-slate-800">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold flex items-center gap-1.5 text-white">
               <Wallet className="w-4 h-4 text-emerald-400" />
-              Double Portefeuille Organisateur (Section 5)
+              Compte de Réception des Fonds (Section 5)
             </span>
             <span className="text-[9px] font-mono text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700">
-              Maj: {portefeuille.derniere_maj}
+              Canal: {monProfil ? monProfil.canal_reception : '—'}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            {/* FBu Wallet */}
+          <div className="grid grid-cols-1 gap-3 pt-1">
+            {/* Destination de réception des recettes */}
             <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-1">
               <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider block">
-                Solde Mobile Money (FBu)
+                Destination de réception
               </span>
-              <div className="text-sm font-mono font-bold text-white">
-                {portefeuille.solde_disponible_fbu.toLocaleString('fr-FR')} FBu
+              <div className="text-sm font-mono font-bold text-white break-all">
+                {monProfil?.destination_reception || 'Chargement…'}
               </div>
               <span className="text-[9px] text-emerald-400 flex items-center gap-1 font-mono">
                 <Check className="w-3 h-3" />
-                Vers +257 69 999 888 (Lumicash)
-              </span>
-            </div>
-
-            {/* Lightning Sats Wallet */}
-            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-1">
-              <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider block">
-                Solde Lightning (Sats ⚡)
-              </span>
-              <div className="text-sm font-mono font-bold text-amber-400">
-                {portefeuille.solde_disponible_sats.toLocaleString('fr-FR')} SATS
-              </div>
-              <span className="text-[9px] text-amber-300 flex items-center gap-1 font-mono">
-                <Zap className="w-3 h-3 text-amber-400" />
-                Vers vitalo@blink.sv (Blink)
+                {monProfil?.canal_reception === 'LUMICASH'
+                  ? 'Numéro Mobile Money (Lumicash)'
+                  : 'Adresse Lightning (Blink)'}
               </span>
             </div>
           </div>
@@ -351,7 +316,7 @@ export const DashboardPage: React.FC = () => {
                   </span>
                 </div>
                 <button
-                  onClick={() => removeScanneurAssignment(asg.id)}
+                  onClick={() => void handleRemoveScanner(asg.id)}
                   title="Révoquer l'assignation"
                   className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 >
@@ -388,6 +353,11 @@ export const DashboardPage: React.FC = () => {
                   <Check className="w-3 h-3" /> Scanneur assigné avec succès !
                 </span>
               )}
+              {assignError && (
+                <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                  L'assignation a échoué : backend indisponible ou profil organisateur non chargé.
+                </span>
+              )}
               <button
                 type="submit"
                 disabled={!newScannerName.trim() || !newScannerPhone.trim()}
@@ -399,18 +369,6 @@ export const DashboardPage: React.FC = () => {
             </div>
           </form>
         </div>
-
-        {/* Quick simulation alerts if any */}
-        {scanMessage && (
-          <div className={`p-4 rounded-2xl border flex items-center gap-3 animate-fade-in text-xs font-bold leading-normal ${
-            scanMessage.type === 'success' 
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
-              : 'bg-red-50 border-red-200 text-red-800'
-          }`}>
-            <Check className={`w-5 h-5 shrink-0 ${scanMessage.type === 'success' ? 'text-emerald-600' : 'text-red-600'}`} />
-            <p>{scanMessage.text}</p>
-          </div>
-        )}
 
         {/* STATS BENTO GRID */}
         <div className="grid grid-cols-2 gap-3">
@@ -582,26 +540,16 @@ export const DashboardPage: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-100">
-                    <div className="space-y-0.5">
-                      <span className="font-bold text-slate-700">{ticket.paymentMethod} ({formatPrice(ticket.price)})</span>
-                    </div>
+<div className="flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-100">
+              <div className="space-y-0.5">
+                <span className="font-bold text-slate-700">{ticket.paymentMethod} ({formatPrice(ticket.price)})</span>
+              </div>
 
-                    {ticket.status === 'valide' ? (
-                      <button
-                        type="button"
-                        onClick={() => triggerDirectScan(ticket.id)}
-                        className="py-1 px-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg transition-all text-[9.5px] cursor-pointer"
-                      >
-                        Valider Entrée
-                      </button>
-                    ) : (
-                      <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1">
-                        <Check className="w-3 h-3 text-slate-400 shrink-0" />
-                        Accès Accordé
-                      </span>
-                    )}
-                  </div>
+              <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1">
+                <Check className="w-3 h-3 text-slate-400 shrink-0" />
+                {ticket.status === 'valide' ? 'En attente d\'entrée' : 'Accès Accordé'}
+              </span>
+            </div>
                 </div>
               ))}
             </div>

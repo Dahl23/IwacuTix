@@ -37,6 +37,7 @@ import { AuthModal } from '../components/AuthModal';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { api, getStoredAccessToken, API_BASE_URL } from '../services/apiClient';
+import { ScanneurAssignment } from '../types';
 import { toAbsoluteApiUrl } from '../services/apiMappers';
 import { parseApiError } from '../utils/apiErrors';
 import { DEFAULT_ANONYMOUS_AVATAR } from '../data';
@@ -59,8 +60,6 @@ export const ProfilePage: React.FC = () => {
     events, 
     followedEventIds, 
     currentPersona, 
-    scanneurAssignments,
-    portefeuille,
     isUserVerified,
     logoutUser,
     openAuthModal
@@ -126,14 +125,9 @@ export const ProfilePage: React.FC = () => {
       setShowPhotoModal(false);
       setFeedback({ type: 'success', text: 'Photo de profil mise à jour avec succès !' });
       setTimeout(() => setFeedback(null), 3500);
-    } catch {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') applyLocalPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-      setShowPhotoModal(false);
-      setFeedback({ type: 'success', text: 'Photo enregistrée localement (backend hors-ligne).' });
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setFeedback({ type: 'error', text: parsed.message || 'Impossible de mettre à jour la photo de profil.' });
       setTimeout(() => setFeedback(null), 4000);
     }
   };
@@ -180,9 +174,23 @@ export const ProfilePage: React.FC = () => {
   const activeTicketsCount = tickets.filter((t) => t.status === 'valide').length;
   const hasJwt = !!getStoredAccessToken();
 
+  // Assignations de scanneurs du backend (GET mon-profil + getScanneurs)
+  const [apiAssignments, setApiAssignments] = useState<ScanneurAssignment[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const prof = await api.organisateurs.getMonProfil();
+        const scans = await api.organisateurs.getScanneurs(prof.id);
+        if (!cancelled && scans && scans.results) setApiAssignments(scans.results);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Active assignments for this user
-  const userAssignments = scanneurAssignments.filter(
-    (a) => a.actif && (a.user_id === user.id || a.user_telephone === user.phone)
+  const userAssignments = apiAssignments.filter(
+    (a) => a.user_id === user.id || a.user_telephone === user.phone
   );
 
   const profileOptions = [
@@ -194,9 +202,9 @@ export const ProfilePage: React.FC = () => {
     },
     {
       label: 'Moyens de paiement enregistrés',
-      description: 'Lumicash & Ecocash + Bitcoin Lightning (Blink)',
+      description: 'Lumicash + Bitcoin Lightning (Blink)',
       icon: CreditCard,
-      action: () => alert(`Votre compte Mobile Money (${user.phone}) et portefeuille Lightning sont configurés.`)
+      action: () => alert('Vos billets peuvent être réglés via Lumicash (OTP SMS) ou Bitcoin Lightning (Blink).')
     },
     {
       label: 'Sécurité du compte (Email & Mot de passe)',
@@ -394,7 +402,7 @@ export const ProfilePage: React.FC = () => {
           {isUserVerified && user.role === 'ORGANISATEUR' && (
             <p className="text-[10px] font-mono font-bold text-indigo-700 uppercase tracking-wider bg-indigo-50 px-2.5 py-1 rounded-full inline-flex items-center gap-1 border border-indigo-200">
               <ShieldCheck className="w-3 h-3 text-emerald-600" />
-              KYC VÉRIFIÉ • {user.organisateurProfile?.nom_structure || "Vital'O FC"}
+              KYC VÉRIFIÉ • {user.organisateurProfile?.nom_structure || 'Profil organisateur vérifié'}
             </p>
           )}
 
@@ -560,7 +568,7 @@ export const ProfilePage: React.FC = () => {
             id="btn-create-event-nav"
             onClick={() => {
               if (!isUserVerified) {
-                openAuthModal("Pour créer des événements et devenir organisateur, vous devez d'abord vous connecter avec votre compte acheteur.");
+                openAuthModal('ORGANISATEUR');
                 return;
               }
               navigate('/organisateur/creer');
@@ -701,7 +709,7 @@ export const ProfilePage: React.FC = () => {
       <AuthModal 
         isOpen={showAuthModal} 
         onClose={() => setShowAuthModal(false)} 
-        defaultTab={user.role === 'ORGANISATEUR' ? 'ORGANISATEUR' : 'ACHETEUR'}
+        initialMode="LOGIN"
       />
 
       {/* Hidden File Input for Direct Local Image Upload */}

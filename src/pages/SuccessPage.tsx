@@ -106,8 +106,8 @@ export const SuccessPage: React.FC = () => {
                   </span>
                 ))
               ) : (
-                <span className="font-mono text-[10px] font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200">
-                  BTK-9812-A3
+                <span className="font-normal text-[10px] text-slate-500">
+                  Vos codes de billets apparaîtront ici — ils sont déjà disponibles dans votre portefeuille.
                 </span>
               )}
             </div>

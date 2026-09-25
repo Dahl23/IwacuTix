@@ -6,7 +6,7 @@ import { ShieldCheck, Building2, User, QrCode, Sliders, ChevronDown, Check, Info
 export const RoleSwitcherBanner: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentPersona, switchPersona, user, scanneurAssignments } = useApp();
+  const { currentPersona, switchPersona, user } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
 
@@ -22,7 +22,7 @@ export const RoleSwitcherBanner: React.FC = () => {
     {
       key: 'ACHETEUR',
       label: 'Acheteur (B2C)',
-      sublabel: 'Compte allégé vérifié par OTP SMS, achat sans mot de passe',
+      sublabel: 'Compte identifiant(s) + mot de passe, inscription rapide',
       icon: User,
       accentColor: 'text-amber-700',
       bgColor: 'bg-amber-50 border-amber-200',
@@ -141,7 +141,7 @@ export const RoleSwitcherBanner: React.FC = () => {
             Cette architecture sépare strictement les comptes :
           </p>
           <ul className="list-disc pl-4 space-y-1 text-slate-300 text-[10px]">
-            <li><strong className="text-amber-300">Acheteur :</strong> Compte allégé créé lors du 1er achat, vérifié par SMS OTP, sans mot de passe obligatoire.</li>
+            <li><strong className="text-amber-300">Acheteur :</strong> Compte créé avec un identifiant (email, téléphone ou pseudo) et un mot de passe obligatoire, sans vérification OTP SMS.</li>
             <li><strong className="text-emerald-300">Organisateur :</strong> Compte pro vérifié (KYC), gestion multi-événements, jauge des places, et reversement automatique (Mobile Money + Lightning).</li>
             <li><strong className="text-cyan-300">Scanneur :</strong> N'est PAS un rôle global en base ! Capacité conférée par un <code>ScanneurAssignment(user_id, event_id)</code> actif.</li>
             <li><strong className="text-purple-300">SuperAdmin :</strong> Supervise la plateforme, valide les dossiers KYC et configure les reversements (<code>ParametrePlateforme</code>).</li>

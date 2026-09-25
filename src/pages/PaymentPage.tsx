@@ -99,8 +99,8 @@ export const PaymentPage: React.FC = () => {
     }
     if (effectiveOptions.length === 0) return;
 
-    if (paymentMethod === 'LUMICASH' && !phoneNumber.trim()) {
-      alert('Veuillez entrer votre numéro de téléphone Lumicash (+257...).');
+    if (paymentMethod === 'LUMICASH' && phoneNumber.replace(/\D/g, '').length < 8) {
+      alert('Veuillez entrer un numéro de téléphone Lumicash valide (+257...).');
       return;
     }
 
@@ -136,6 +136,7 @@ export const PaymentPage: React.FC = () => {
         event_id: item.eventId,
         tier_id: item.tierId || '',
         quantite: item.quantity,
+        telephone: paymentMethod === 'LUMICASH' ? fullPhone : undefined,
         destinataires,
       };
     });
@@ -244,7 +245,7 @@ export const PaymentPage: React.FC = () => {
               <div>
                 <h4 className="text-xs font-bold text-orange-950">Compte acheteur obligatoire pour réserver</h4>
                 <p className="text-[11px] text-orange-900/80 leading-relaxed mt-0.5">
-                  Pour valider votre réservation et recevoir vos billets nominatifs avec QR Code sécurisé, vous devez renseigner votre <strong>nom, prénom</strong> et <strong>numéro de téléphone</strong> vérifié par code SMS.
+                  Pour valider votre réservation et recevoir vos billets nominatifs avec QR Code sécurisé, vous devez renseigner votre <strong>nom, prénom</strong> et <strong>numéro de téléphone</strong> sur votre compte.
                 </p>
               </div>
             </div>
@@ -252,7 +253,7 @@ export const PaymentPage: React.FC = () => {
               onClick={() => openAuthModal('RESERVATION')}
               className="w-full py-2.5 bg-brand-primary hover:bg-orange-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
             >
-              <span>Créer mon compte & Valider mon numéro</span>
+              <span>Créer mon compte & ajouter mon numéro</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -320,8 +321,8 @@ export const PaymentPage: React.FC = () => {
               </div>
               <div className="text-right">
                 <span className="text-[10px] text-slate-400 block">Conversion</span>
-                <span className="text-lg font-mono font-black text-orange-600 flex items-center gap-1">
-                  1 FBu ≈ 3.2 SATS
+                <span className="text-sm font-mono font-bold text-orange-600 flex items-center gap-1">
+                  calculée par le backend
                   <Zap className="w-4 h-4 fill-current text-amber-500" />
                 </span>
               </div>

@@ -489,6 +489,7 @@ export const api = {
       event_id: string;
       tier_id: string;
       quantite: number;
+      telephone?: string;
       destinataires?: ApiDestinataireBillet[];
     }) =>
       request<LumicashDemanderOtpResponse>('/api/tickets/commandes/lumicash/demander-otp/', {
@@ -497,7 +498,7 @@ export const api = {
       }),
 
     // 5.2 Étape 2 Lumicash - Confirmer avec OTP
-    confirmerLumicash: (payload: { order_id: string; otp: string }) =>
+    confirmerLumicash: (payload: { order_id: string; otp: string; telephone?: string }) =>
       request<LumicashConfirmerResponse>('/api/tickets/commandes/lumicash/confirmer/', {
         method: 'POST',
         body: JSON.stringify(payload),

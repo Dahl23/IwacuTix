@@ -32,9 +32,6 @@ export const OrganizerHubPage: React.FC = () => {
     user, 
     events, 
     tickets, 
-    scanneurAssignments, 
-    assignScanneur, 
-    removeScanneurAssignment,
     isUserVerified,
     openAuthModal
   } = useApp();
@@ -52,6 +49,7 @@ export const OrganizerHubPage: React.FC = () => {
   const [apiEvents, setApiEvents] = useState<Event[] | null>(null);
   const [orgStats, setOrgStats] = useState<OrganisateurStats | null>(null);
   const [monProfilId, setMonProfilId] = useState<string | null>(null);
+  const [monProfilStatus, setMonProfilStatus] = useState<'EN_ATTENTE' | 'VERIFIE' | 'REJETE' | undefined>(user.organisateurProfile?.statut_verification);
   const [apiScanners, setApiScanners] = useState<ScanneurAssignment[] | null>(null);
 
   const mapApiOrganizerEvent = (e: Record<string, any>): Event => {
@@ -93,6 +91,7 @@ export const OrganizerHubPage: React.FC = () => {
       try {
         const prof = await api.organisateurs.getMonProfil();
         setMonProfilId(prof.id);
+        setMonProfilStatus(prof.statut_verification);
         try {
           const scans = await api.organisateurs.getScanneurs(prof.id);
           if (scans && scans.results) setApiScanners(scans.results);
@@ -128,10 +127,10 @@ export const OrganizerHubPage: React.FC = () => {
   const myEventIds = new Set(myEvents.map(e => e.id));
   const myTickets = tickets.filter(t => myEventIds.has(t.eventId));
 
-  // 3. Filter scanner assignments attached to my events only
-  const myScanners = apiScanners !== null ? apiScanners : scanneurAssignments.filter(a => myEventIds.has(a.event_id));
-  const displayScanners = apiScanners !== null ? apiScanners : myScanners;
-  const activeScannersCount = displayScanners.filter((a) => a.actif !== false).length;
+  // 3. Scanneurs assignés à mes événements (backend)
+  const myScanners = apiScanners ?? [];
+  const displayScanners = myScanners;
+  const activeScannersCount = displayScanners.length;
 
   // 4. Compute statistics attached strictly to the organizer's events
   const totalRevenueFbu = myTickets.reduce((acc, t) => acc + t.price, 0);
@@ -164,17 +163,17 @@ export const OrganizerHubPage: React.FC = () => {
         });
         const scans = await api.organisateurs.getScanneurs(monProfilId);
         if (scans && scans.results) setApiScanners(scans.results);
+        setScannerNom('');
+        setScannerPhone('');
+        setScannerSuccessMsg(`Scanneur « ${scannerNom.trim()} » habilité avec succès pour cet événement !`);
+        setTimeout(() => setScannerSuccessMsg(''), 4000);
+        return;
       } catch {
-        assignScanneur(scannerNom.trim(), scannerPhone.trim(), targetEventId);
+        setScannerErrorMsg('Habilitation échouée : backend indisponible. Réessayez dans quelques secondes.');
+        return;
       }
-    } else {
-      assignScanneur(scannerNom.trim(), scannerPhone.trim(), targetEventId);
     }
-
-    setScannerNom('');
-    setScannerPhone('');
-    setScannerSuccessMsg(`Scanneur « ${scannerNom.trim()} » habilité avec succès pour cet événement !`);
-    setTimeout(() => setScannerSuccessMsg(''), 4000);
+    setScannerErrorMsg('Profil organisateur non chargé. Réessayez.');
   };
 
   const handleRemoveScanner = async (assignmentId: string, scannerNom: string) => {
@@ -186,14 +185,14 @@ export const OrganizerHubPage: React.FC = () => {
         await api.organisateurs.retirerScanneur(monProfilId, assignmentId);
         const scans = await api.organisateurs.getScanneurs(monProfilId);
         if (scans && scans.results) setApiScanners(scans.results);
-        setScannerSuccessMsg(`Accès scanneur de « ${scannerNom} » retiré.`);
-        setTimeout(() => setScannerSuccessMsg(''), 4000);
+      } catch {
+        setScannerErrorMsg('Retrait échoué : backend indisponible. Réessayez dans quelques secondes.');
         return;
-      } catch {}
+      }
+    } else {
+      setScannerErrorMsg('Profil organisateur non chargé. Réessayez.');
+      return;
     }
-    // Repli local (backend indisponible) : retirer l'assignation côté contexte
-    setApiScanners((prev) => (prev === null ? prev : prev.filter((a) => a.id !== assignmentId)));
-    removeScanneurAssignment(assignmentId);
     setScannerSuccessMsg(`Accès scanneur de « ${scannerNom} » retiré.`);
     setTimeout(() => setScannerSuccessMsg(''), 4000);
   };
@@ -211,7 +210,7 @@ export const OrganizerHubPage: React.FC = () => {
         </div>
         <h2 className="text-lg font-display font-extrabold text-slate-900">Compte Acheteur Préalable Obligatoire</h2>
         <p className="text-xs text-slate-600 max-w-sm mt-2 leading-relaxed">
-          Avant de pouvoir activer votre profil d'organisateur et créer des événements sur IwacuTix, vous devez d'abord créer et faire vérifier votre compte acheteur avec votre nom, prénom et numéro de téléphone portable (+257...).
+          Avant de soumettre votre dossier organisateur sur IwacuTix, vous devez d'abord créer votre compte acheteur (identifiant : email, téléphone ou pseudo + mot de passe).
         </p>
         <button
           onClick={() => openAuthModal('ORGANISATEUR')}
@@ -225,7 +224,7 @@ export const OrganizerHubPage: React.FC = () => {
   }
 
   // If not verified organizer, prompt to verify CNI
-  if (user.role !== 'ORGANISATEUR' && user.role !== 'SUPERADMIN') {
+  if (user.role !== 'ORGANISATEUR' && user.role !== 'SUPERADMIN' && monProfilStatus !== 'VERIFIE') {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[#F8FAFC]">
         <div className="w-16 h-16 rounded-3xl bg-orange-100 text-brand-primary flex items-center justify-center mb-4 shadow-md">
