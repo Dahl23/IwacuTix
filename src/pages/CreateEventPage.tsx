@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { Event, TicketCategory } from '../types';
 import { api } from '../services/apiClient';
+import { parseApiError } from '../utils/apiErrors';
 import { ChevronLeft, Calendar as CalendarIcon, MapPin, Sparkles, Plus, Trash2, Tag, Layers, CheckCircle, ShieldAlert, Upload } from 'lucide-react';
 
 const PRESET_IMAGES = [
@@ -249,8 +250,9 @@ export const CreateEventPage: React.FC = () => {
         alert('Félicitations ! Votre événement a été créé et publié avec succès.');
       }
       navigate(`/organisateur/dashboard/${createdId}`);
-    } catch (err) {
-      alert('La création de l\'événement a échoué. Vérifiez votre connexion et réessayez.');
+    } catch (err: any) {
+      const parsed = parseApiError(err);
+      alert(parsed.message || 'La création de l\'événement a échoué. Vérifiez votre connexion et réessayez.');
     } finally {
       setIsCreating(false);
     }
