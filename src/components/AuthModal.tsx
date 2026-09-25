@@ -391,7 +391,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <button
                 type="submit"
-                disabled={loading || !hasAnyIdentifier || !newPassword.trim()}
+                disabled={loading || !nomComplet.trim() || !newPassword.trim()}
                 className="w-full py-3 bg-brand-primary hover:bg-orange-600 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-primary/20 disabled:opacity-50 cursor-pointer active:scale-95"
               >
                 {loading ? 'Création en cours...' : 'Créer mon compte'}
