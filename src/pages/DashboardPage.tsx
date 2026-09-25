@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { TicketPurchased } from '../types';
 import { api } from '../services/apiClient';
+import { MediaGalleryManager } from '../components/MediaGalleryManager';
 import { 
   ChevronLeft, 
   TrendingUp, 
@@ -312,6 +313,9 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* GALERIE MÉDIAS DE L'ÉVÉNEMENT */}
+        <MediaGalleryManager eventId={event.id} />
 
         {/* SECTION 4: GESTION DE L'ÉQUIPE DE SCANNEURS (ScanneurAssignment) */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 space-y-3">

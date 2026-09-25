@@ -108,18 +108,18 @@ export const CreateEventPage: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const isVideo = file.type.startsWith('video/');
+    const isVideo = file.type === 'video/mp4';
     const isImage = file.type.startsWith('image/');
     if (!isVideo && !isImage) {
       setUploadFile(null);
       setUploadPreview('');
-      alert('Veuillez choisir une photo (JPG/PNG/WebP) ou une vidéo (MP4/WebM).');
+      alert('Veuillez choisir une photo (JPG/PNG/WebP) ou une vidéo MP4.');
       return;
     }
-    if (file.size > 50 * 1024 * 1024) {
+    if (isVideo && file.size > 50 * 1024 * 1024) {
       setUploadFile(null);
       setUploadPreview('');
-      alert('Fichier trop volumineux (max 50 Mo).');
+      alert('Vidéo trop volumineuse (max 50 Mo).');
       return;
     }
     setUploadFile(file);
@@ -470,7 +470,7 @@ export const CreateEventPage: React.FC = () => {
           <label className="block cursor-pointer">
             <input
               type="file"
-              accept="image/*,video/mp4,video/webm"
+              accept="image/*,video/mp4"
               className="hidden"
               onChange={handleFileChange}
             />
@@ -485,7 +485,7 @@ export const CreateEventPage: React.FC = () => {
                 <p className="text-[10px] text-slate-500">
                   {uploadFile
                     ? `${(uploadFile.size / 1024 / 1024).toFixed(1)} Mo • ${uploadFile.type.split('/')[0]}`
-                    : 'JPG, PNG, WebP • MP4, WebM max 50 Mo'}
+                    : 'JPG, PNG, WebP • Vidéo MP4 max 50 Mo'}
                 </p>
               </div>
               {uploadFile && (

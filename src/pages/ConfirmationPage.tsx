@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useApp, OrderDraft } from '../AppContext';
 import { api } from '../services/apiClient';
 import { apiTicketToPurchased } from '../services/apiMappers';
+import { parseApiError } from '../utils/apiErrors';
+import QRCode from 'qrcode';
 import {
   Smartphone, Clock, ShieldAlert, CheckCircle, Zap, AlertTriangle, Copy, Check, RefreshCcw, ArrowRight
 } from 'lucide-react';
@@ -50,6 +52,7 @@ export const ConfirmationPage: React.FC = () => {
   const [submittingOtp, setSubmittingOtp] = useState(false);
   const [copied, setCopied] = useState(false);
   const [countdown, setCountdown] = useState(600); // 10 min (expires_at)
+  const [qrDataUrls, setQrDataUrls] = useState<Record<string, string>>({});
   const activeIndexRef = useRef(0);
   const finalizedRef = useRef(false);
 
@@ -114,12 +117,13 @@ export const ConfirmationPage: React.FC = () => {
       setMessage(null);
       setPhase('WAIT');
     } catch (err: any) {
+      const parsed = parseApiError(err);
       setMessage(
-        err?.code === 'moyen_paiement_non_accepte'
+        parsed.code === 'moyen_paiement_non_accepte'
           ? 'Ce tier n’accepte pas le paiement Lightning.'
-          : err?.code === 'stock_insuffisant'
+          : parsed.code === 'stock_insuffisant'
           ? 'Stock insuffisant (409).'
-          : err?.error || 'Impossible de créer la facture Lightning.'
+          : parsed.message
       );
       setPhase('ERROR');
     }
@@ -145,14 +149,14 @@ export const ConfirmationPage: React.FC = () => {
       });
       setMessage(res.paiement?.instruction || 'Saisissez l’OTP reçu par SMS.');
       setPhase('CONFIRM_OTP');
-    } catch (err: any) {
-      const code = err?.code;
+} catch (err: any) {
+      const parsed = parseApiError(err);
       setMessage(
-        code === 'stock_insuffisant'
+        parsed.code === 'stock_insuffisant'
           ? 'Stock insuffisant (409).'
-          : code === 'moyen_paiement_non_accepte'
+          : parsed.code === 'moyen_paiement_non_accepte'
           ? 'Ce tier n’accepte pas Lumicash.'
-          : err?.error || 'Impossible de démarrer le paiement Lumicash.'
+          : parsed.message
       );
       setPhase('ERROR');
     }
@@ -179,7 +183,8 @@ export const ConfirmationPage: React.FC = () => {
         setMessage('Commande non confirmée. Réessayez.');
       }
     } catch (err: any) {
-      const code = err?.code;
+      const parsed = parseApiError(err);
+      const code = parsed.code;
       if (code === 'paiement_echoue') {
         setMessage('OTP incorrect ou paiement échoué (402). Demandez un nouvel OTP.');
       } else if (code === 'reservation_expiree') {
@@ -189,7 +194,7 @@ export const ConfirmationPage: React.FC = () => {
         if (idx + 1 < drafts.length) await requestLumicashOtp(idx + 1);
         else await finalize();
       } else {
-        setMessage(err?.error || 'Erreur lors de la confirmation.');
+        setMessage(parsed.message);
       }
     } finally {
       setSubmittingOtp(false);
@@ -208,33 +213,49 @@ export const ConfirmationPage: React.FC = () => {
   }, []);
 
   // ---- POLLING Lightning : vérifier l'état des commandes toutes les 3s (doc §6) ----
+  // S'arrête définitivement dès que plus aucune facture n'est PENDING (SUCCESS/ECHEC/EXPIRE).
+  const pollingInvoicesRef = useRef<CreatedInvoice[]>([]);
+  pollingInvoicesRef.current = invoices;
+
   useEffect(() => {
     if (!isLightning || phase !== 'WAIT' || finalizedRef.current) return;
-    const timer = setInterval(async () => {
-      try {
-        const pending = invoices.filter((i) => i && i.statut === 'PENDING');
-        if (pending.length === 0) return;
-        for (const inv of pending) {
-          try {
-            const cmd = await api.tickets.getCommande(inv.orderId);
-            setInvoices((prev) =>
-              prev.map((x) =>
-                x && x.orderId === inv.orderId
-                  ? { ...x, statut: cmd.statut as CreatedInvoice['statut'] }
-                  : x
-              )
-            );
-            if (cmd.statut === 'EXPIRE') {
-              setMessage('Réservation de stock expirée (10 min). Veuillez relancer la commande.');
-              setPhase('EXPIRED');
-              return;
-            }
-          } catch {}
-        }
-      } catch {}
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [isLightning, phase, invoices]);
+    let stopped = false;
+
+    const tick = async () => {
+      if (stopped || finalizedRef.current) return;
+      const pending = pollingInvoicesRef.current.filter((i) => i && i.statut === 'PENDING');
+      if (pending.length === 0) {
+        stopped = true;
+        clearInterval(timer);
+        return;
+      }
+      const newStatuts: Record<string, CreatedInvoice['statut']> = {};
+      let expired = false;
+      for (const inv of pending) {
+        try {
+          const cmd = await api.tickets.getCommande(inv.orderId);
+          newStatuts[inv.orderId] = cmd.statut as CreatedInvoice['statut'];
+          if (cmd.statut === 'EXPIRE') expired = true;
+        } catch {}
+      }
+      if (stopped || finalizedRef.current) return;
+      setInvoices((prev) =>
+        prev.map((x) =>
+          x && newStatuts[x.orderId] ? { ...x, statut: newStatuts[x.orderId] } : x
+        )
+      );
+      if (expired) {
+        setMessage('Réservation de stock expirée (10 min). Veuillez relancer la commande.');
+        setPhase('EXPIRED');
+      }
+    };
+
+    const timer = setInterval(tick, 3000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [isLightning, phase]);
 
   // ---- Détecter quand toutes les factures Lightning sont SUCCESS ----
   useEffect(() => {
@@ -243,6 +264,36 @@ export const ConfirmationPage: React.FC = () => {
     if (allDone) finalize();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoices, phase, isLightning]);
+
+  // ---- QR Lightning généré en LOCAL (garde la paymentRequest privée, jamais envoyée à un tiers) ----
+  useEffect(() => {
+    const withRequest = invoices.filter((i) => i && i.paymentRequest);
+    if (withRequest.length === 0) return;
+    let cancelled = false;
+    const pendingOrderIds = withRequest.map((i) => i!.orderId);
+    setQrDataUrls((prev) => {
+      const next = { ...prev };
+      for (const id of pendingOrderIds) delete next[id];
+      return next;
+    });
+    withRequest.forEach((inv) => {
+      QRCode.toDataURL(`lightning:${inv!.paymentRequest}`, {
+        width: 240,
+        margin: 1,
+        errorCorrectionLevel: 'M',
+        color: { dark: '#020617', light: '#FFFFFF' },
+      })
+        .then((url) => {
+          if (!cancelled) {
+            setQrDataUrls((prev) => ({ ...prev, [inv!.orderId]: url }));
+          }
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [invoices]);
 
   // ---- COUNTDOWN à partir de expires_at (min des factures en attente) ----
   useEffect(() => {
@@ -359,11 +410,17 @@ export const ConfirmationPage: React.FC = () => {
                         <span className="font-bold text-slate-800">{formatFbu(inv.montantFbu)}</span>
                       </div>
 
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`lightning:${inv.paymentRequest}`)}`}
-                        alt="QR Code Lightning BOLT11"
-                        className="w-44 h-44 mx-auto rounded-xl border border-slate-200 bg-white"
-                      />
+                      {qrDataUrls[inv.orderId] ? (
+                        <img
+                          src={qrDataUrls[inv.orderId]}
+                          alt="QR Code Lightning BOLT11"
+                          className="w-44 h-44 mx-auto rounded-xl border border-slate-200 bg-white"
+                        />
+                      ) : (
+                        <div className="w-44 h-44 mx-auto flex items-center justify-center bg-slate-50 rounded-xl border border-slate-200">
+                          <Zap className="w-7 h-7 text-slate-300 animate-pulse" />
+                        </div>
+                      )}
 
                       <button
                         onClick={() => copyBolt11(inv.paymentRequest!)}

@@ -51,12 +51,17 @@ export const PaymentPage: React.FC = () => {
   ];
 
   // Moyens de paiement autorisés par les tiers sélectionnés (moyens_paiement_acceptes)
+  // Seuls LIGHTNING et LUMICASH sont actifs — les moyens dépréciés (ECOCASH/BANCOBU/IHELA)
+  // sont systématiquement exclus même si un ancien tier les renvoie encore.
+  const ACTIVE_PAYMENT_METHODS = ['LUMICASH', 'LIGHTNING'] as const;
   const allowedMethods = new Set<string>();
   cart.forEach((item) => {
     const evt = events.find((e) => e.id === item.eventId);
     const cat = evt?.ticketCategories.find((c) => c.name === item.categoryName);
     const accepted = cat?.moyens_paiement_acceptes || ['LUMICASH', 'LIGHTNING'];
-    accepted.forEach((m) => allowedMethods.add(m));
+    accepted.forEach((m) => {
+      if ((ACTIVE_PAYMENT_METHODS as readonly string[]).includes(m)) allowedMethods.add(m);
+    });
   });
   const effectiveOptions = paymentOptions.filter((o) => allowedMethods.has(o.id));
 
@@ -134,6 +139,14 @@ export const PaymentPage: React.FC = () => {
         destinataires,
       };
     });
+
+    // Garde-fou client avant envoi : le backend exige destinaires.length === quantite (§5.1)
+    for (const o of orders) {
+      if (o.destinataires.length !== o.quantite) {
+        alert('Erreur interne : le nombre de bénéficiaires ne correspond pas à la quantité. Réessayez.');
+        return;
+      }
+    }
 
     const fullPhone = paymentMethod === 'LUMICASH' ? `+257 ${phoneNumber.trim()}` : '';
 

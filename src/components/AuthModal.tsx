@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { api, setStoredTokens } from '../services/apiClient';
 import { useApp } from '../AppContext';
+import { parseApiError } from '../utils/apiErrors';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -82,8 +83,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         res?.message || `Code de v�rification envoy� par SMS au ${cleanPhone}`
       );
       setStep('OTP');
-    } catch (err: any) {
-      setError(err?.error || err?.telephone?.[0] || 'Erreur lors de la demande du code de vérification.');
+    } catch (err) {
+      setError(parseApiError(err).message);
     } finally {
       setLoading(false);
     }
@@ -129,8 +130,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         }
       }, 1000);
 
-    } catch (err: any) {
-      setError(err?.error || 'Code OTP invalide. Veuillez réessayer.');
+    } catch (err) {
+      setError(parseApiError(err).message);
     } finally {
       setLoading(false);
     }
@@ -164,8 +165,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           navigate('/organisateur');
         }
       }, 1000);
-    } catch (err: any) {
-      setError(err?.error || err?.identifiant?.[0] || 'Identifiant ou mot de passe incorrect.');
+    } catch (err) {
+      setError(parseApiError(err).message);
     } finally {
       setLoading(false);
     }

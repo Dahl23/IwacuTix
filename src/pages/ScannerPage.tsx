@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { api } from '../services/apiClient';
+import { parseApiError } from '../utils/apiErrors';
 import jsQR from 'jsqr';
 import { 
   ChevronLeft, 
@@ -112,15 +113,16 @@ export const ScannerPage: React.FC = () => {
             : undefined,
         });
       } else {
+        const parsed = parseApiError(res);
         setLastScanResult({
           success: false,
-          message: res.error || 'Billet rejeté',
+          message: parsed.message,
           reason:
-            res.code === 'ticket_deja_scanne'
+            parsed.code === 'ticket_deja_scanne'
               ? 'Ce billet a déjà été validé à l\'entrée (tentative de double passage).'
-              : res.code === 'ticket_invalide'
+              : parsed.code === 'ticket_invalide'
               ? 'Le code scanné ne correspond à aucun billet officiel IwacuTix.'
-              : res.code === 'acces_interdit'
+              : parsed.code === 'acces_interdit'
               ? 'Accès interdit : scanneur non habilité pour cet événement.'
               : undefined,
         });
@@ -131,12 +133,13 @@ export const ScannerPage: React.FC = () => {
         const local = scanTicketWithSecurity(code, selectedEventId);
         setLastScanResult(local);
       } else {
+        const parsed = parseApiError(err);
         setLastScanResult({
           success: false,
-          message: err?.error || 'Échec de la validation du billet',
-          reason: err?.code === 'ticket_deja_scanne'
+          message: parsed.message,
+          reason: parsed.code === 'ticket_deja_scanne'
             ? 'Billet déjà scanné (fraude).'
-            : err?.code === 'ticket_invalide'
+            : parsed.code === 'ticket_invalide'
             ? 'Billet invalide ou introuvable.'
             : undefined,
         });

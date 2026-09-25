@@ -13,21 +13,32 @@ export const TicketDetailPage: React.FC = () => {
   const { user, tickets } = useApp();
   const [isExporting, setIsExporting] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+  const [qrUnavailable, setQrUnavailable] = useState(false);
 
   // Find the ticket by ID
   const ticket = tickets.find((t) => t.id === id);
 
   useEffect(() => {
     if (!ticket) return;
-    const rawQrContent = ticket.qr_code_hash || ticket.qrCodeValue || `${ticket.id}.hmac_sec_2026`;
+    setQrCodeDataUrl('');
+    // Contenu brut du QR fourni par le backend (/api/tickets/mes-billets/ → qr_code_hash).
+    // Aucun fallback fabriqué : un hash inventé afficherait un QR visuellement valide mais
+    // rejeté au scan (ticket_invalide), voire laisserait croire qu'un billet a été émis sans l'être.
+    const rawQrContent = ticket.qr_code_hash || ticket.qrCodeValue;
+    if (!rawQrContent) {
+      setQrUnavailable(true);
+      return;
+    }
+    setQrUnavailable(false);
     QRCode.toDataURL(rawQrContent, {
       width: 280,
       margin: 1,
+      errorCorrectionLevel: 'M',
       color: {
         dark: '#020617',
         light: '#FFFFFF',
       },
-    }).then(setQrCodeDataUrl).catch(console.error);
+    }).then(setQrCodeDataUrl).catch(() => setQrUnavailable(true));
   }, [ticket]);
 
   if (!ticket) {
@@ -208,7 +219,15 @@ export const TicketDetailPage: React.FC = () => {
             
             {/* QR Code Container */}
             <div className="p-3 bg-white rounded-3xl border border-slate-200 shadow-md relative group flex items-center justify-center">
-              {qrCodeDataUrl ? (
+              {qrUnavailable ? (
+                <div className="w-44 h-44 flex flex-col items-center justify-center gap-2 bg-red-50 rounded-xl border border-red-100 px-3 text-center">
+                  <ShieldCheck className="w-7 h-7 text-red-400" />
+                  <p className="text-[10px] font-bold text-red-700 leading-snug">QR code indisponible</p>
+                  <p className="text-[9px] text-red-500 leading-snug">
+                    Ce billet n'a pas de code émis par le serveur. Contactez le support.
+                  </p>
+                </div>
+              ) : qrCodeDataUrl ? (
                 <img 
                   src={qrCodeDataUrl} 
                   alt={`QR Code ${ticket.id}`} 
