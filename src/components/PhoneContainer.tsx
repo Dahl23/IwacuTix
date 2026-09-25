@@ -48,6 +48,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
   const isOrganizer = currentPersona === 'ORGANISATEUR' || currentPersona === 'SUPERADMIN' || user.role === 'ORGANISATEUR' || user.role === 'SUPERADMIN' || (user.role as string)?.toLowerCase() === 'organisateur';
+  const isSuperAdmin = currentPersona === 'SUPERADMIN' || user.role === 'SUPERADMIN';
   const unreadNotifications = notifications ? notifications.filter(n => !n.read).length : 0;
 
   // Close profile dropdown when clicking outside
@@ -77,9 +78,21 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
   ];
 
   // Organizer space is only displayed in navigation for organizers
-  const navItems = isOrganizer
-    ? [...baseNavItems, { path: '/organisateur', icon: TrendingUp, label: 'Espace Organisateur' }]
-    : baseNavItems;
+  const navItems = isSuperAdmin
+    ? [
+        ...baseNavItems,
+        { path: '/organisateur', icon: TrendingUp, label: 'Espace Organisateur' },
+        { path: '/admin/superadmin?tab=requests', icon: ShieldCheck, label: 'Demandes' },
+      ]
+    : isOrganizer
+      ? [...baseNavItems, { path: '/organisateur', icon: TrendingUp, label: 'Espace Organisateur' }]
+      : baseNavItems;
+
+  const isNavItemActive = (item: typeof navItems[number]) => {
+    const [itemPath, itemSearch = ''] = item.path.split('?');
+    if (itemPath === '/home') return path === '/' || path === '' || path === '/home';
+    return path === itemPath && (!itemSearch || location.search.includes(itemSearch));
+  };
 
   if (isStandaloneScreen) {
     return (
@@ -107,7 +120,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
           {/* Center: Clean Desktop Navigation Links */}
           <nav className="hidden md:flex items-center gap-1.5 lg:gap-2">
             {navItems.map((item) => {
-              const isActive = path === item.path || (item.path === '/home' && (path === '/' || path === ''));
+              const isActive = isNavItemActive(item);
               const Icon = item.icon;
               return (
                 <Link
@@ -357,7 +370,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
               Navigation
             </p>
             {navItems.map((item) => {
-              const isActive = path === item.path || (item.path === '/home' && (path === '/' || path === ''));
+              const isActive = isNavItemActive(item);
               const Icon = item.icon;
               return (
                 <Link
@@ -479,7 +492,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
       {/* ================= FIXED STABLE MOBILE BOTTOM BAR ================= */}
       <nav aria-label="Navigation mobile" className="md:hidden fixed bottom-0 left-0 right-0 z-40 w-full bg-white/70 dark:bg-[#090A0F]/75 backdrop-blur-2xl border-t border-orange-500/15 dark:border-white/10 px-1.5 sm:px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] flex items-center justify-around shrink-0 shadow-[0_-4px_24px_-2px_rgba(0,0,0,0.12)]">
         {navItems.map((item) => {
-          const isActive = path === item.path || (item.path === '/home' && (path === '/' || path === ''));
+          const isActive = isNavItemActive(item);
           const Icon = item.icon;
           return (
             <Link
