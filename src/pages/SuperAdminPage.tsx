@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { api } from '../services/apiClient';
+import { api, API_BASE_URL } from '../services/apiClient';
+import { toAbsoluteApiUrl } from '../services/apiMappers';
 import { ParametrePlateforme, AdminStats, DemandeOrganisateur, TransactionAuditLog, Versement } from '../types';
 import { 
   ChevronLeft, 
@@ -17,7 +18,9 @@ import {
   TrendingUp, 
   Save, 
   ArrowUpRight,
-  AlertTriangle
+  AlertTriangle,
+  FileText,
+  ExternalLink
 } from 'lucide-react';
 
 export const SuperAdminPage: React.FC = () => {
@@ -380,7 +383,7 @@ const [commissionTaux, setCommissionTaux] = useState(parametrePlateforme.commiss
                   <div>
                     <h4 className="font-bold text-xs text-slate-900">{org.nom_structure}</h4>
                     <p className="text-[10px] text-slate-500">
-                      Resp: {org.responsable} • {org.telephone}{org.email ? ` • ${org.email}` : ''}
+                      Resp: {org.responsable || 'Non spécifié'} • {org.telephone ? `Tél: ${org.telephone}` : 'Tél: Non renseigné (optionnel)'}{org.email ? ` • ${org.email}` : ''}
                     </p>
                   </div>
                   <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold ${
@@ -396,15 +399,26 @@ const [commissionTaux, setCommissionTaux] = useState(parametrePlateforme.commiss
                   </span>
                 </div>
 
-                <div className="text-[10px] font-mono text-slate-600 bg-slate-50 p-2 rounded-lg space-y-0.5">
-                  <div className="text-slate-400 uppercase text-[9px]">Dossier d'adhésion :</div>
+                <div className="text-[10px] font-mono text-slate-600 bg-slate-50 p-2.5 rounded-lg space-y-1">
+                  <div className="text-slate-400 uppercase text-[9px] font-bold">Dossier d'adhésion :</div>
                   {org.justification ? (
                     <div className="text-slate-700 font-semibold">Justification : {org.justification}</div>
                   ) : (
-                    <div className="text-slate-700 font-semibold">Demande d'adhésion envoyée (KYC).</div>
+                    <div className="text-slate-700 font-semibold">Demande d'adhésion transmise (CNI Recto & Verso).</div>
                   )}
                   {org.documentVerification && (
-                    <div className="text-slate-500">Document de vérification fourni.</div>
+                    <div className="pt-1">
+                      <a
+                        href={toAbsoluteApiUrl(org.documentVerification, API_BASE_URL)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-200 text-brand-primary text-[10px] font-bold hover:bg-orange-50 transition-colors"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-brand-primary" />
+                        <span>Consulter la CNI (Recto & Verso)</span>
+                        <ExternalLink className="w-3 h-3 text-slate-400" />
+                      </a>
+                    </div>
                   )}
                   {org.motif_rejet && (
                     <div className="text-red-600 font-semibold">Motif de rejet : {org.motif_rejet}</div>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { api } from '../services/apiClient';
+import { api, API_BASE_URL } from '../services/apiClient';
+import { toAbsoluteApiUrl } from '../services/apiMappers';
 import { parseApiError } from '../utils/apiErrors';
 import { DemandeOrganisateur } from '../types';
 import { 
@@ -18,12 +19,110 @@ import {
   RefreshCw,
   FileText,
   XCircle,
-  Phone
+  Phone,
+  Trash2,
+  ExternalLink,
+  Eye
 } from 'lucide-react';
+
+/**
+ * Assemble les deux photos (Recto et Verso) de la Carte Nationale d'Identité
+ * en un document composite haute résolution pour le champ document_verification du backend.
+ */
+async function createMergedIdDocument(rectoFile: File, versoFile: File): Promise<File> {
+  const isRectoImage = rectoFile.type.startsWith('image/');
+  const isVersoImage = versoFile.type.startsWith('image/');
+
+  // Si l'un des deux est un PDF, on retourne rectoFile en document principal
+  // (les deux fichiers sont également transmis individuellement dans FormData)
+  if (!isRectoImage || !isVersoImage) {
+    return rectoFile;
+  }
+
+  return new Promise((resolve) => {
+    const imgRecto = new Image();
+    const imgVerso = new Image();
+    let loadedCount = 0;
+
+    const onImageLoaded = () => {
+      loadedCount++;
+      if (loadedCount < 2) return;
+
+      try {
+        const maxWidth = 1200;
+        const scaleRecto = maxWidth / (imgRecto.width || 1200);
+        const rWidth = maxWidth;
+        const rHeight = Math.round((imgRecto.height || 750) * scaleRecto);
+
+        const scaleVerso = maxWidth / (imgVerso.width || 1200);
+        const vWidth = maxWidth;
+        const vHeight = Math.round((imgVerso.height || 750) * scaleVerso);
+
+        const bannerHeight = 44;
+        const padding = 16;
+        const totalHeight = rHeight + vHeight + (bannerHeight * 2) + (padding * 3);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = maxWidth;
+        canvas.height = totalHeight;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          resolve(rectoFile);
+          return;
+        }
+
+        // Fond moderne sombre
+        ctx.fillStyle = '#0F172A';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Bandeau Titre Recto
+        ctx.fillStyle = '#1E293B';
+        ctx.fillRect(0, 0, maxWidth, bannerHeight);
+        ctx.fillStyle = '#F97316';
+        ctx.font = 'bold 18px ui-sans-serif, system-ui, sans-serif';
+        ctx.fillText("CARTE NATIONALE D'IDENTITÉ — RECTO (FACE AVANT)", 20, 28);
+
+        // Image Recto
+        ctx.drawImage(imgRecto, 0, bannerHeight, rWidth, rHeight);
+
+        // Bandeau Titre Verso
+        const versoBannerY = bannerHeight + rHeight + padding;
+        ctx.fillStyle = '#1E293B';
+        ctx.fillRect(0, versoBannerY, maxWidth, bannerHeight);
+        ctx.fillStyle = '#F97316';
+        ctx.font = 'bold 18px ui-sans-serif, system-ui, sans-serif';
+        ctx.fillText("CARTE NATIONALE D'IDENTITÉ — VERSO (FACE ARRIÈRE)", 20, versoBannerY + 28);
+
+        // Image Verso
+        const versoImageY = versoBannerY + bannerHeight;
+        ctx.drawImage(imgVerso, 0, versoImageY, vWidth, vHeight);
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const composite = new File([blob], `cni_recto_verso_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            resolve(composite);
+          } else {
+            resolve(rectoFile);
+          }
+        }, 'image/jpeg', 0.92);
+      } catch (err) {
+        console.warn('[OrganizerKyc] Erreur fusion recto/verso canvas :', err);
+        resolve(rectoFile);
+      }
+    };
+
+    imgRecto.onerror = () => resolve(rectoFile);
+    imgVerso.onerror = () => resolve(rectoFile);
+
+    imgRecto.src = URL.createObjectURL(rectoFile);
+    imgVerso.src = URL.createObjectURL(versoFile);
+  });
+}
 
 export const OrganizerKycPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useApp();
+  const { user, isUserVerified, openAuthModal } = useApp();
 
   // Liste des demandes récupérées depuis GET /api/organisateurs/demandes/mes/
   const [demandes, setDemandes] = useState<DemandeOrganisateur[]>([]);
@@ -33,9 +132,15 @@ export const OrganizerKycPage: React.FC = () => {
   // Form states
   const [nomLegal, setNomLegal] = useState(user.name || '');
   const [structureName, setStructureName] = useState(user.organisateurProfile?.nom_structure || '');
+  const [telephoneContact, setTelephoneContact] = useState(user.phone || '');
   const [justification, setJustification] = useState('');
-  const [identityPhotoUrl, setIdentityPhotoUrl] = useState<string>('');
-  const [identityPhotoFile, setIdentityPhotoFile] = useState<File | null>(null);
+
+  // Deux pièces requises : Recto et Verso de la CNI
+  const [rectoFile, setRectoFile] = useState<File | null>(null);
+  const [rectoPreviewUrl, setRectoPreviewUrl] = useState<string>('');
+
+  const [versoFile, setVersoFile] = useState<File | null>(null);
+  const [versoPreviewUrl, setVersoPreviewUrl] = useState<string>('');
 
   const [showNewForm, setShowNewForm] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -43,6 +148,10 @@ export const OrganizerKycPage: React.FC = () => {
 
   // Charger les demandes de l'utilisateur au montage (GET /api/organisateurs/demandes/mes/)
   const fetchMesDemandes = async (isManualRefresh = false) => {
+    if (!isUserVerified) {
+      setLoadingDemandes(false);
+      return;
+    }
     if (isManualRefresh) setRefreshing(true);
     try {
       const res = await api.organisateurs.getMesDemandes();
@@ -59,44 +168,97 @@ export const OrganizerKycPage: React.FC = () => {
 
   useEffect(() => {
     fetchMesDemandes();
-  }, []);
+  }, [isUserVerified]);
 
-  const handleIdentityPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRectoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setIdentityPhotoFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setIdentityPhotoUrl(reader.result as string);
-    reader.readAsDataURL(file);
+    setRectoFile(file);
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => setRectoPreviewUrl(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setRectoPreviewUrl('');
+    }
   };
 
-  // Soumission directe de la demande (POST /api/organisateurs/demandes/) sans vérification email
+  const handleVersoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setVersoFile(file);
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => setVersoPreviewUrl(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setVersoPreviewUrl('');
+    }
+  };
+
+  // Soumission directe de la demande (POST /api/organisateurs/demandes/)
+  // Sans vérification par téléphone ni par email, téléphone optionnel,
+  // et soumission conjointe du Recto et du Verso de la CNI.
   const handleSubmitDemande = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+
+    if (!isUserVerified) {
+      openAuthModal('ORGANISATEUR');
+      return;
+    }
 
     if (!nomLegal.trim()) {
       setErrorMsg('Veuillez renseigner votre nom complet légal.');
       return;
     }
 
-    if (!identityPhotoFile) {
-      setErrorMsg('Veuillez téléverser la photo de votre pièce d\'identité.');
+    if (!structureName.trim()) {
+      setErrorMsg("Veuillez renseigner le nom de votre organisation ou structure d'événements.");
+      return;
+    }
+
+    if (!rectoFile) {
+      setErrorMsg("Veuillez téléverser la face avant (Recto) de votre carte nationale d'identité.");
+      return;
+    }
+
+    if (!versoFile) {
+      setErrorMsg("Veuillez téléverser la face arrière (Verso) de votre carte nationale d'identité.");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const payload = {
-        nom_entreprise: structureName.trim() || nomLegal.trim(),
-        nom_structure: structureName.trim() || undefined,
-        justification: justification.trim() || `Demande d'adhésion organisateur IwacuTix - ${nomLegal.trim()}`,
-        document_verification: identityPhotoFile,
-      };
+      // 1. Assemblage composite des deux faces (Recto + Verso)
+      const combinedDocument = await createMergedIdDocument(rectoFile, versoFile);
+
+      // 2. Construction du FormData complet avec pièces jointes
+      const formData = new FormData();
+      formData.append('nom_entreprise', structureName.trim());
+      formData.append('nom_structure', structureName.trim());
+
+      const justifText = justification.trim()
+        ? justification.trim()
+        : `Demande d'adhésion organisateur IwacuTix - ${nomLegal.trim()}${telephoneContact.trim() ? ` (Tél: ${telephoneContact.trim()})` : ''}`;
+      formData.append('justification', justifText);
+
+      // Téléphone optionnel
+      if (telephoneContact.trim()) {
+        formData.append('telephone', telephoneContact.trim());
+      }
+
+      // Document principal composite (contenant Recto et Verso)
+      formData.append('document_verification', combinedDocument);
+
+      // Champs spécifiques si le backend les prend en charge
+      formData.append('document_recto', rectoFile);
+      formData.append('document_verso', versoFile);
+      formData.append('document_verification_verso', versoFile);
 
       // POST /api/organisateurs/demandes/
-      const createdDemande = await api.organisateurs.soumettreDemande(payload);
+      const createdDemande = await api.organisateurs.soumettreDemande(formData);
 
       // Récupération immédiate de la liste mise à jour via GET /api/organisateurs/demandes/mes/
       await fetchMesDemandes();
@@ -106,11 +268,13 @@ export const OrganizerKycPage: React.FC = () => {
       }
 
       setShowNewForm(false);
-      setIdentityPhotoFile(null);
-      setIdentityPhotoUrl('');
+      setRectoFile(null);
+      setRectoPreviewUrl('');
+      setVersoFile(null);
+      setVersoPreviewUrl('');
     } catch (err) {
       const { message } = parseApiError(err);
-      setErrorMsg(message || 'Impossible de soumettre la demande. Vérifiez que votre téléphone est renseigné et réessayez.');
+      setErrorMsg(message || 'Impossible de soumettre la demande. Veuillez vérifier vos informations et réessayez.');
     } finally {
       setIsSubmitting(false);
     }
@@ -163,6 +327,44 @@ export const OrganizerKycPage: React.FC = () => {
     }
   };
 
+  // 0. Si l'utilisateur n'a pas de compte actif connecté
+  if (!isUserVerified) {
+    return (
+      <div className="flex-1 flex flex-col min-h-0 bg-[#F8FAFC]">
+        <div className="px-4 py-3 bg-white border-b border-slate-200/80 sticky top-0 z-20 flex items-center justify-between">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-1.5 rounded-xl bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <div className="text-center">
+            <h1 className="text-sm font-display font-extrabold text-slate-900">Adhésion Organisateur</h1>
+            <p className="text-[10px] text-slate-500 font-mono">Compte actif requis</p>
+          </div>
+          <div className="w-7" />
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
+          <div className="w-16 h-16 rounded-3xl bg-orange-100 text-brand-primary flex items-center justify-center mb-4 shadow-md">
+            <ShieldCheck className="w-8 h-8" />
+          </div>
+          <h2 className="text-lg font-display font-extrabold text-slate-900">Compte Actif Requis</h2>
+          <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+            Pour soumettre votre dossier d'adhésion organisateur et publier des événements, vous devez être connecté à un compte IwacuTix actif.
+          </p>
+          <button
+            onClick={() => openAuthModal('ORGANISATEUR')}
+            className="mt-6 w-full py-3.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-orange-500/25 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <span>Se connecter / Créer un compte</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[#F8FAFC] overflow-y-auto">
       {/* Header */}
@@ -175,7 +377,7 @@ export const OrganizerKycPage: React.FC = () => {
         </button>
         <div className="text-center">
           <h1 className="text-sm font-display font-extrabold text-slate-900">Adhésion Organisateur</h1>
-          <p className="text-[10px] text-slate-500 font-mono">Vérification d'identité & Approbation SuperAdmin</p>
+          <p className="text-[10px] text-slate-500 font-mono">Dossier CNI (Recto & Verso) & Approbation SuperAdmin</p>
         </div>
         <button
           onClick={() => void fetchMesDemandes(true)}
@@ -188,17 +390,27 @@ export const OrganizerKycPage: React.FC = () => {
       </div>
 
       <div className="p-4 sm:p-6 max-w-xl mx-auto w-full space-y-5 pb-12">
-        {/* Rappel des conditions d'éligibilité */}
+        {/* Conditions d'adhésion claires */}
         <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-300/40 text-amber-900 text-xs space-y-2">
           <div className="flex items-center gap-2 font-bold text-amber-950">
             <Info className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>Conditions de validation d'adhésion</span>
+            <span>Conditions du dossier d'adhésion</span>
           </div>
-          <ul className="list-disc list-inside space-y-1 text-[11px] text-amber-900/90 leading-relaxed">
-            <li>Numéro de téléphone vérifié sur votre compte client.</li>
-            <li>Dossier d'identité complet avec pièce justificative officielle.</li>
+          <ul className="list-disc list-inside space-y-1.5 text-[11px] text-amber-900/90 leading-relaxed">
             <li>
-              <strong>Aucune vérification d'e-mail requise</strong> : la demande est soumise directement à l'examen du SuperAdmin.
+              <strong>Compte actif requis</strong> : connecté sous l'identifiant <span className="font-semibold text-amber-950">{user.email || user.username || user.name || 'Actif'}</span>.
+            </li>
+            <li>
+              <strong>Nom de l'entreprise ou structure</strong> : identification publique de votre organisation.
+            </li>
+            <li>
+              <strong>Carte Nationale d'Identité (CNI)</strong> : soumission obligatoire des <strong>deux faces (Recto et Verso)</strong>.
+            </li>
+            <li>
+              <strong>Numéro de téléphone optionnel</strong> : aucun numéro n'est imposé dans ce parcours.
+            </li>
+            <li>
+              <strong>Aucune vérification SMS ni e-mail</strong> : la validation est humaine et effectuée directement par le <strong>SuperAdmin</strong>.
             </li>
           </ul>
         </div>
@@ -222,7 +434,7 @@ export const OrganizerKycPage: React.FC = () => {
                 Profil Organisateur Vérifié & Actif
               </h2>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Votre demande a été approuvée par l'équipe IwacuTix. Vous pouvez créer des événements, gérer vos billetteries et assigner vos scanneurs.
+                Votre demande a été approuvée par le SuperAdmin IwacuTix. Vous pouvez créer des événements, gérer vos billetteries et assigner vos scanneurs.
               </p>
             </div>
 
@@ -259,8 +471,10 @@ export const OrganizerKycPage: React.FC = () => {
                 <span className="font-bold text-slate-800">{derniereDemande.nom_entreprise || derniereDemande.nom_structure}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500">Téléphone du compte :</span>
-                <span className="font-mono font-medium text-slate-800">{derniereDemande.telephone || user.phone}</span>
+                <span className="text-slate-500">Téléphone de contact :</span>
+                <span className="font-mono font-medium text-slate-800">
+                  {derniereDemande.telephone || user.phone || 'Non renseigné (optionnel)'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Date de soumission :</span>
@@ -276,18 +490,27 @@ export const OrganizerKycPage: React.FC = () => {
               </div>
               {derniereDemande.document_verification && (
                 <div className="flex justify-between items-center pt-1 border-t border-slate-200">
-                  <span className="text-slate-500">Document joint :</span>
-                  <span className="inline-flex items-center gap-1 text-[11px] text-brand-primary font-bold">
+                  <span className="text-slate-500">Pièces CNI jointes :</span>
+                  <a
+                    href={toAbsoluteApiUrl(derniereDemande.document_verification, API_BASE_URL)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-brand-primary font-bold hover:underline"
+                  >
                     <FileText className="w-3.5 h-3.5" />
-                    Pièce d'identité transmise
-                  </span>
+                    <span>CNI (Recto & Verso)</span>
+                    <ExternalLink className="w-3 h-3 text-slate-400" />
+                  </a>
                 </div>
               )}
             </div>
 
-            <p className="text-xs text-slate-500 leading-relaxed text-center">
-              Votre dossier complet a passé le contrôle automatique. Il est actuellement entre les mains de l'administrateur de la plateforme pour validation finale.
-            </p>
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 text-xs flex items-start gap-2">
+              <Info className="w-4 h-4 shrink-0 text-blue-600 mt-0.5" />
+              <p className="leading-relaxed">
+                Votre dossier complet a été transmis. Le SuperAdmin examine actuellement vos documents. Aucune action supplémentaire (ni SMS, ni email) n'est requise.
+              </p>
+            </div>
 
             <button
               onClick={() => void fetchMesDemandes(true)}
@@ -300,7 +523,7 @@ export const OrganizerKycPage: React.FC = () => {
           </div>
         )}
 
-        {/* 3. DERNIÈRE DEMANDE REJETÉE (AVEC POSSIBILITÉ DE RE-SOUMETTRE) */}
+        {/* 3. DERNIÈRE DEMANDE REJETÉE */}
         {!isApproved && !hasActivePending && derniereDemande && (derniereDemande.statut === 'REJETE' || derniereDemande.statut === 'REJETE_AUTO') && !showNewForm && (
           <div className="space-y-4 bg-white p-5 sm:p-6 rounded-2xl border border-red-200 shadow-sm">
             <div className="flex items-center gap-3">
@@ -320,7 +543,7 @@ export const OrganizerKycPage: React.FC = () => {
             <div className="p-3.5 bg-red-50/70 border border-red-200 rounded-xl space-y-1 text-xs text-red-800">
               <span className="font-bold block">Motif du rejet :</span>
               <p className="leading-relaxed">
-                {derniereDemande.motif_rejet || 'Le dossier transmis ne remplit pas tous les critères requis (téléphone non vérifié ou document illisible).'}
+                {derniereDemande.motif_rejet || 'Le dossier transmis ne remplit pas tous les critères requis. Vous pouvez soumettre une nouvelle demande avec des photos plus nettes.'}
               </p>
             </div>
 
@@ -334,19 +557,19 @@ export const OrganizerKycPage: React.FC = () => {
           </div>
         )}
 
-        {/* 4. FORMULAIRE DE SOUMISSION DIRECTE (SANS VÉRIFICATION EMAIL) */}
+        {/* 4. FORMULAIRE DE SOUMISSION DIRECTE */}
         {(!isApproved && !hasActivePending && (!derniereDemande || showNewForm || (derniereDemande.statut !== 'REJETE' && derniereDemande.statut !== 'REJETE_AUTO'))) && (
-          <form onSubmit={handleSubmitDemande} className="space-y-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+          <form onSubmit={handleSubmitDemande} className="space-y-5 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
             <div className="space-y-1">
               <h2 className="text-base font-display font-extrabold text-slate-900">
                 Dossier d'adhésion organisateur
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Renseignez les informations de votre structure et joignez une pièce d'identité officielle. Votre demande sera soumise directement pour examen par le SuperAdmin.
+                Renseignez le nom de votre structure et téléversez les deux faces (Recto et Verso) de votre carte nationale d'identité. Le SuperAdmin examinera directement votre demande.
               </p>
             </div>
 
-            <div className="space-y-3 pt-2">
+            <div className="space-y-4 pt-1">
               {/* Nom légal */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -368,7 +591,7 @@ export const OrganizerKycPage: React.FC = () => {
               {/* Organisation / Structure */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Nom de l'organisation ou structure événementielle <span className="text-red-500">*</span>
+                  Nom de l'organisation ou entreprise événementielle <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <Building2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -376,7 +599,7 @@ export const OrganizerKycPage: React.FC = () => {
                     type="text"
                     value={structureName}
                     onChange={(e) => setStructureName(e.target.value)}
-                    placeholder="Ex: Buja Horizon Events ou Vital'O FC"
+                    placeholder="Ex: Buja Horizon Events, Vital'O FC..."
                     className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none"
                     required
                   />
@@ -384,76 +607,199 @@ export const OrganizerKycPage: React.FC = () => {
                 <span className="text-[10px] text-slate-400">Ce nom apparaîtra publiquement sur vos billets et événements.</span>
               </div>
 
-              {/* Téléphone de contact */}
+              {/* Téléphone de contact (OPTIONNEL) */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Numéro de téléphone vérifié
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Numéro de téléphone de contact
+                  </label>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold">
+                    Optionnel
+                  </span>
+                </div>
                 <div className="relative">
                   <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
-                    value={user.phone || 'Non renseigné'}
-                    readOnly
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-medium text-slate-700 focus:outline-none cursor-not-allowed"
+                    value={telephoneContact}
+                    onChange={(e) => setTelephoneContact(e.target.value)}
+                    placeholder="Ex: +257 79 12 34 56"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium text-slate-800 focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none"
                   />
                 </div>
-                {!user.phone && (
-                  <span className="text-[10px] text-red-500 font-medium">
-                    Attention : un numéro de téléphone vérifié sur votre compte est obligatoire pour le contrôle automatique.
-                  </span>
-                )}
+                <span className="text-[10px] text-slate-400">
+                  Facultatif. Aucune vérification par SMS n'est requise. Ce numéro sert uniquement de contact direct si nécessaire.
+                </span>
               </div>
 
               {/* Justification / Note */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Présentation de vos activités (Optionnel)
+                  Présentation de vos activités <span className="text-slate-400 font-normal">(Optionnel)</span>
                 </label>
                 <textarea
                   value={justification}
                   onChange={(e) => setJustification(e.target.value)}
-                  placeholder="Décrivez brièvement les types d'événements que vous organisez (concerts, conférences, sports...)"
+                  placeholder="Décrivez brièvement les types d'événements que vous organisez (concerts, festivals, conférences, compétitions sportives...)"
                   rows={2}
                   className="w-full p-3 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none resize-none"
                 />
               </div>
 
-              {/* Photo de la pièce d'identité */}
-              <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 space-y-2 pt-2">
+              {/* SECTION CNI : RECTO ET VERSO */}
+              <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800">Photo de la pièce d'identité</span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">Obligatoire</span>
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 block">
+                      Carte Nationale d'Identité (CNI)
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      Les deux faces (Recto et Verso) sont requises pour l'examen par le SuperAdmin.
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold border border-amber-200">
+                    2 faces requises
+                  </span>
                 </div>
-                {identityPhotoUrl ? (
-                  <div className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-900">
-                    <img src={identityPhotoUrl} alt="Pièce d'identité" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                      <span className="text-white text-[10px] font-bold bg-black/60 px-2 py-1 rounded">Photo chargée</span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* 1. CNI RECTO */}
+                  <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/60 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                        <span>Face 1 : Recto</span>
+                        <span className="text-red-500">*</span>
+                      </span>
+                      {rectoFile ? (
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Prêt
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-bold text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">
+                          Requis
+                        </span>
+                      )}
                     </div>
+
+                    {rectoPreviewUrl ? (
+                      <div className="relative rounded-lg overflow-hidden border border-slate-200 aspect-[16/10] bg-slate-900">
+                        <img src={rectoPreviewUrl} alt="CNI Recto" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRectoFile(null);
+                            setRectoPreviewUrl('');
+                          }}
+                          className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/60 text-white hover:bg-red-600 transition-colors cursor-pointer"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="border-2 border-dashed border-slate-300 hover:border-brand-primary rounded-lg p-3 flex flex-col items-center justify-center text-slate-400 gap-1 aspect-[16/10] bg-white cursor-pointer transition-colors">
+                        <UploadCloud className="w-5 h-5 text-slate-400" />
+                        <span className="text-[10px] font-bold text-slate-700">Téléverser le Recto</span>
+                        <span className="text-[9px] text-slate-400">Photo ou PDF face avant</span>
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          onChange={handleRectoUpload}
+                          className="sr-only"
+                        />
+                      </label>
+                    )}
+
+                    {rectoFile && (
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
+                        <span className="truncate max-w-[140px] font-mono">{rectoFile.name}</span>
+                        <label className="text-brand-primary font-bold hover:underline cursor-pointer">
+                          Changer
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={handleRectoUpload}
+                            className="sr-only"
+                          />
+                        </label>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 flex flex-col items-center justify-center text-slate-400 gap-1 aspect-video">
-                    <UploadCloud className="w-6 h-6" />
-                    <span className="text-[10px]">Photo ou scan de votre pièce d'identité</span>
+
+                  {/* 2. CNI VERSO */}
+                  <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/60 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                        <span>Face 2 : Verso</span>
+                        <span className="text-red-500">*</span>
+                      </span>
+                      {versoFile ? (
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Prêt
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-bold text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">
+                          Requis
+                        </span>
+                      )}
+                    </div>
+
+                    {versoPreviewUrl ? (
+                      <div className="relative rounded-lg overflow-hidden border border-slate-200 aspect-[16/10] bg-slate-900">
+                        <img src={versoPreviewUrl} alt="CNI Verso" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVersoFile(null);
+                            setVersoPreviewUrl('');
+                          }}
+                          className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/60 text-white hover:bg-red-600 transition-colors cursor-pointer"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="border-2 border-dashed border-slate-300 hover:border-brand-primary rounded-lg p-3 flex flex-col items-center justify-center text-slate-400 gap-1 aspect-[16/10] bg-white cursor-pointer transition-colors">
+                        <UploadCloud className="w-5 h-5 text-slate-400" />
+                        <span className="text-[10px] font-bold text-slate-700">Téléverser le Verso</span>
+                        <span className="text-[9px] text-slate-400">Photo ou PDF face arrière</span>
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          onChange={handleVersoUpload}
+                          className="sr-only"
+                        />
+                      </label>
+                    )}
+
+                    {versoFile && (
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
+                        <span className="truncate max-w-[140px] font-mono">{versoFile.name}</span>
+                        <label className="text-brand-primary font-bold hover:underline cursor-pointer">
+                          Changer
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={handleVersoUpload}
+                            className="sr-only"
+                          />
+                        </label>
+                      </div>
+                    )}
                   </div>
-                )}
-                <label
-                  className="w-full py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-1"
-                >
-                  <UploadCloud className="w-3 h-3 text-slate-500" />
-                  Sélectionner le document
-                  <input type="file" accept="image/*,application/pdf" onChange={handleIdentityPhotoUpload} className="sr-only" />
-                </label>
+                </div>
               </div>
             </div>
 
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 disabled:opacity-60 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-orange-500/20 active:scale-95 transition-all mt-4 cursor-pointer"
+              disabled={isSubmitting || !rectoFile || !versoFile || !structureName.trim()}
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-orange-500/20 active:scale-95 transition-all mt-4 cursor-pointer"
             >
-              <span>{isSubmitting ? 'Soumission du dossier...' : 'Soumettre ma demande Organisateur'}</span>
+              <span>{isSubmitting ? 'Transmission du dossier CNI...' : 'Soumettre au SuperAdmin'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
@@ -472,6 +818,7 @@ export const OrganizerKycPage: React.FC = () => {
                     <span className="font-bold text-slate-800 block">{d.nom_entreprise || d.nom_structure}</span>
                     <span className="text-[10px] text-slate-400">
                       {d.date_soumission ? new Date(d.date_soumission).toLocaleDateString('fr-FR') : '-'}
+                      {d.telephone ? ` • Tél : ${d.telephone}` : ''}
                     </span>
                   </div>
                   <div>

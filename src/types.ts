@@ -329,11 +329,13 @@ export interface OrganisateurStats {
 
 export interface DemandeOrganisateur {
   id: string;
-  telephone: string;
-  nom_soumis: string;
+  telephone?: string | null;
+  nom_soumis?: string;
   nom_entreprise: string;
   nom_structure?: string | null;
   document_verification: string;
+  document_recto?: string | null;
+  document_verso?: string | null;
   justification?: string | null;
   statut: 'EN_ATTENTE_CONTROLE_AUTO' | 'REJETE_AUTO' | 'EN_ATTENTE_SUPERADMIN' | 'APPROUVE' | 'REJETE';
   motif_rejet?: string | null;

@@ -338,7 +338,15 @@ export const api = {
       ),
 
     // 2.5 Soumettre une demande d'adhésion organisateur
-    soumettreDemande: (data: FormData | { nom_entreprise: string; document_verification: File; nom_structure?: string; justification?: string }) => {
+    soumettreDemande: (data: FormData | { 
+      nom_entreprise: string; 
+      document_verification: File; 
+      document_recto?: File;
+      document_verso?: File;
+      telephone?: string;
+      nom_structure?: string; 
+      justification?: string;
+    }) => {
       let body: FormData;
       if (data instanceof FormData) {
         body = data;
@@ -346,6 +354,9 @@ export const api = {
         body = new FormData();
         body.append('nom_entreprise', data.nom_entreprise);
         body.append('document_verification', data.document_verification);
+        if (data.document_recto) body.append('document_recto', data.document_recto);
+        if (data.document_verso) body.append('document_verso', data.document_verso);
+        if (data.telephone) body.append('telephone', data.telephone);
         if (data.nom_structure) body.append('nom_structure', data.nom_structure);
         if (data.justification) body.append('justification', data.justification);
       }
