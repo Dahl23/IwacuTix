@@ -206,7 +206,8 @@ export const api = {
       }),
 
     // 1.2 Connexion commune à tous les rôles (email, username ou téléphone → résolution serveur)
-    // Erreur unique anti-énumération : 400 { detail: "Identifiant ou mot de passe incorrect." }
+    // Erreur unique anti-énumération : 400 {"identifiant": ["Identifiant ou mot de passe incorrect."]}
+    // (validation par champ, PAS un format {error, code} → lire précisément identifiant[0] côté UI)
     login: (identifiant: string, password: string) =>
       request<ApiAuthResponse>('/api/auth/login/', {
         method: 'POST',
@@ -224,41 +225,43 @@ export const api = {
     me: () => request<ApiUser>('/api/auth/me/'),
 
     // 1.5 Envoyer l'email de vérification (token valable 1h, throttlé verif_email 3/10min → 429)
+    // Réponse succès structurée : { message, code: "verif_envoi" }
     verifierEmail: () =>
-      request<{ detail?: string; message?: string }>('/api/auth/me/verifier-email/', {
+      request<{ message?: string; code?: 'verif_envoi' }>('/api/auth/me/verifier-email/', {
         method: 'POST',
       }),
 
-    // 1.5.b Confirmer l'email avec le token reçu (400 token_expire | token_invalide)
+    // 1.5.b Confirmer l'email avec le token reçu (200 → {user}, 400 token_expire | token_invalide)
     confirmerVerifierEmail: (code: string) =>
-      request<{ detail?: string; email_verifie?: boolean }>('/api/auth/me/verifier-email/confirmer/', {
+      request<{ user: ApiUser }>('/api/auth/me/verifier-email/confirmer/', {
         method: 'POST',
         body: JSON.stringify({ code }),
       }),
 
     // 1.6 Demande de réinitialisation de mot de passe (réponse générique anti-énumération, 429 throttlé)
+    // Réponse succès structurée : { message, code: "reset_lien_envoye" }
     passwordResetRequest: (identifiant: string) =>
-      request<{ detail?: string; message?: string }>('/api/auth/password-reset/request/', {
+      request<{ message?: string; code?: 'reset_lien_envoye' }>('/api/auth/password-reset/request/', {
         method: 'POST',
         body: JSON.stringify({ identifiant }),
       }),
 
-    // 1.6.b Confirmer la réinitialisation (400 token_expire | token_invalide, 429 tentatives_epuisees)
+    // 1.6.b Confirmer la réinitialisation (200 → {user}, 400 token_expire | token_invalide, 429 tentatives_epuisees)
     passwordResetConfirm: (data: { identifiant: string; code: string; nouveau_mdp: string }) =>
-      request<{ detail?: string; message?: string }>('/api/auth/password-reset/confirm/', {
+      request<{ user: ApiUser }>('/api/auth/password-reset/confirm/', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
 
     // 1.7 Désactiver le compte (suppression douce → statut DESACTIVE, connexion/achats bloqués ensuite)
     desactiver: () =>
-      request<{ detail?: string; statut_compte?: 'DESACTIVE' }>('/api/auth/me/desactiver/', {
+      request<{ user: ApiUser }>('/api/auth/me/desactiver/', {
         method: 'POST',
       }),
 
     // 1.7.b Réactiver le compte (JWT encore valide → retour ACTIF)
     reactiver: () =>
-      request<{ detail?: string; statut_compte?: 'ACTIF' }>('/api/auth/me/reactiver/', {
+      request<{ user: ApiUser }>('/api/auth/me/reactiver/', {
         method: 'POST',
       }),
 
@@ -310,12 +313,29 @@ export const api = {
         body: JSON.stringify(payload),
       }),
 
-    // 2.4 Désactiver un scanneur (désactivation, pas suppression)
-    desactiverScanneur: (organisateurId: string, assignmentId: string) =>
-      request<ScanneurAssignment>(`/api/organisateurs/${organisateurId}/scanneurs/${assignmentId}/`, {
-        method: 'PATCH',
-        body: JSON.stringify({ actif: false }),
+    // 2.4 Retirer un scanneur d'un événement (DELETE → 204, suppression d'assignation)
+    retirerScanneur: (organisateurId: string, assignmentId: string) =>
+      request<void>(`/api/organisateurs/${organisateurId}/scanneurs/${assignmentId}/`, {
+        method: 'DELETE',
       }),
+
+    // 2.6.1 Demander la vérification email organisateur (code 6 chiffres, validité 10 min)
+    // Erreurs : 400 email_absent (aucune adresse email sur le profil) | 429 tentatives_epuisees
+    demanderVerificationEmailOrganisateur: () =>
+      request<{ message?: string; canal: 'email' }>('/api/organisateurs/verifier-email/demander/', {
+        method: 'POST',
+      }),
+
+    // 2.6.2 Confirmer le code de vérification email organisateur
+    // Erreurs : 400 code_expire | code_invalide ; 429 tentatives_epuisees
+    confirmerVerificationEmailOrganisateur: (code: string) =>
+      request<{ message?: string; profil: OrganisateurProfilApi }>(
+        '/api/organisateurs/verifier-email/confirmer/',
+        {
+          method: 'POST',
+          body: JSON.stringify({ code }),
+        }
+      ),
 
     // 2.5 Soumettre une demande d'adhésion organisateur
     soumettreDemande: (data: FormData | { nom_entreprise: string; document_verification: File; nom_structure?: string; justification?: string }) => {

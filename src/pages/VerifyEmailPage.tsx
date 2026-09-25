@@ -29,9 +29,17 @@ export const VerifyEmailPage: React.FC = () => {
       setStatus('loading');
       try {
         const res = await api.auth.confirmerVerifierEmail(code.trim());
-        updateUserProfile({ email_verifie: true });
+        const me = res.user as { nom_complet?: string; email?: string; telephone?: string; role?: string; email_verifie?: boolean; statut_compte?: string };
+        updateUserProfile({
+          email_verifie: true,
+          ...(me.nom_complet ? { name: me.nom_complet } : {}),
+          ...(me.email ? { email: me.email } : {}),
+          ...(me.telephone ? { phone: me.telephone } : {}),
+          ...(me.role ? { role: me.role } : {}),
+          ...(me.statut_compte ? { statut_compte: me.statut_compte } : {}),
+        });
         setStatus('success');
-        setMessage(res?.detail || 'Adresse email vérifiée avec succès !');
+        setMessage('Adresse email vérifiée avec succès ! Vous pouvez maintenant acheter et organiser des événements.');
       } catch (err) {
         const { message: apiMessage, code: apiCode } = parseApiError(err);
         setStatus('error');

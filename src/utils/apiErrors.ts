@@ -5,7 +5,8 @@
  * Ici on centralise la lecture côté UI :
  *  - erreur métier normalisée    → { error, code }  → message affichable + code machine
  *  - validation de serializer    → { champ: [...] } → premier message par champ
- *  - exception login (compte inactif) → { detail }   → message brut du serveur
+ *  - exception login (§1.5)      → { identifiant: [...] } → identifiant[0] lu précisément
+ *  - exception login (autre)     → { detail }   → message brut du serveur
  *
  * Le contrat de l'intercepteur n'est PAS modifié : cette fonction ne fait que lire.
  */
@@ -22,6 +23,10 @@ const DEPRECATED_TICKET_CODES: Record<string, string> = {
   otp_expire: 'Code expiré. Demandez un nouveau code.',
   otp_invalide: 'Code incorrect.',
   otp_tentatives_epuisees: 'Trop de tentatives. Demandez un nouveau code.',
+  tentatives_epuisees: 'Trop de tentatives échouées. Demandez un nouveau code.',
+  code_expire: 'Code de vérification expiré. Demandez-en un nouveau.',
+  code_invalide: 'Code de vérification incorrect.',
+  email_absent: 'Aucune adresse email sur le profil. Renseignez-en une pour recevoir le code.',
   moyen_paiement_non_accepte: 'Ce moyen de paiement n’est pas accepté pour ce billet.',
   paiement_lumicash_via_onramp: 'Le paiement Lumicash se fait via l’on-ramp, pas ici.',
   stock_insuffisant: 'Stock insuffisant pour cette réservation.',
@@ -57,6 +62,12 @@ export const parseApiError = (err: unknown): ApiErrorMessage => {
   // 2) Exception login documentée : { detail } (compte inactif/suspendu)
   if (typeof e.detail === 'string') {
     return { message: e.detail, code: 'detail' };
+  }
+
+  // 2.b) Erreur de connexion spécifiée §1.5 : validation par champ { identifiant: [message] }
+  //      (PAS un format {error, code}) — on lit précisément identifiant[0].
+  if (Array.isArray(e.identifiant) && typeof e.identifiant[0] === 'string') {
+    return { message: e.identifiant[0], code: 'identifiant' };
   }
 
   // 3) Validation de serializer : { champ: [message] } — passe telle quelle

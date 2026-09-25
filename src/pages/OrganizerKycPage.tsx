@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { api } from '../services/apiClient';
+import { parseApiError } from '../utils/apiErrors';
 import { 
   ShieldCheck, 
   UploadCloud, 
@@ -18,12 +19,13 @@ import {
   Sparkles,
   QrCode,
   TrendingUp,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Info
 } from 'lucide-react';
 
 export const OrganizerKycPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, submitOrganizerKyc } = useApp();
+  const { user, submitOrganizerKyc, updateUserProfile } = useApp();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -41,7 +43,6 @@ export const OrganizerKycPage: React.FC = () => {
   const [email, setEmail] = useState(user.email || '');
   const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [emailOtpCode, setEmailOtpCode] = useState('');
-  const [generatedEmailCode, setGeneratedEmailCode] = useState('');
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,24 +84,58 @@ export const OrganizerKycPage: React.FC = () => {
     setStep(2);
   };
 
-  const handleSendEmailOtp = () => {
-    if (!email.trim() || !email.includes('@')) {
-      setErrorMsg('Veuillez entrer une adresse email valide.');
+  const handleSendEmailOtp = async () => {
+    setErrorMsg('');
+    setIsSubmitting(true);
+    try {
+      await api.organisateurs.demanderVerificationEmailOrganisateur();
+      setEmailOtpSent(true);
+      setEmailOtpCode('');
+    } catch (err) {
+      const { message, code: apiCode } = parseApiError(err);
+      if (apiCode === 'email_absent') {
+        setErrorMsg('Aucune adresse email sur votre profil organisateur. Ajoutez une adresse email valide avant de continuer.');
+      } else if (apiCode === 'TOO_MANY_REQUESTS' || /429|trop|reessayez/i.test(message || '')) {
+        setErrorMsg('Trop de demandes récentes. Veuillez réessayer dans quelques minutes.');
+      } else {
+        setErrorMsg(message || 'Impossible d\'envoyer le code de vérification. Réessayez.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifyEmailOtp = async () => {
+    if (!emailOtpCode.trim()) {
+      setErrorMsg('Veuillez saisir le code à 6 chiffres reçu par email.');
       return;
     }
     setErrorMsg('');
-    setEmailOtpSent(true);
-    const code = String(Math.floor(1000 + Math.random() * 9000));
-    setGeneratedEmailCode(code);
-  };
-
-  const handleVerifyEmailOtp = () => {
-    if (emailOtpCode === generatedEmailCode && emailOtpCode.length === 4) {
+    setIsSubmitting(true);
+    try {
+      const res = await api.organisateurs.confirmerVerificationEmailOrganisateur(emailOtpCode.trim());
+      updateUserProfile({
+        email_verifie: true,
+        ...(res.profil && res.profil.email ? { email: res.profil.email } : {}),
+        ...(res.profil && res.profil.nom_entreprise ? { organisateurProfile: { ...user.organisateurProfile, nom_structure: res.profil.nom_entreprise } } : {}),
+      });
       setIsEmailVerified(true);
-      setErrorMsg('');
       setStep(3);
-    } else {
-      setErrorMsg('Code OTP email invalide. (le code a été envoyé par email)');
+    } catch (err) {
+      const { message, code: apiCode } = parseApiError(err);
+      if (apiCode === 'code_expire') {
+        setErrorMsg(message || 'Ce code a expiré (validité 10 minutes). Demandez un nouveau code.');
+        setEmailOtpSent(false);
+      } else if (apiCode === 'code_invalide') {
+        setErrorMsg(message || 'Code invalide. Vérifiez le code reçu par email.');
+      } else if (apiCode === 'TOO_MANY_REQUESTS' || /429|trop|reessayez/i.test(message || '')) {
+        setErrorMsg('Trop de tentatives échouées. Demandez un nouveau code plus tard.');
+        setEmailOtpSent(false);
+      } else {
+        setErrorMsg(message || 'Impossible de valider le code. Réessayez.');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -357,61 +392,67 @@ export const OrganizerKycPage: React.FC = () => {
                 2. Vérification de votre Email Professionnel
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Un code de vérification à 4 chiffres sera envoyé à votre adresse pour authentifier les notifications et rapports de billetterie.
+                Un code de vérification à 6 chiffres (valable 10 minutes) sera envoyé à l'adresse email de votre profil organisateur pour authentifier les notifications et rapports de billetterie.
               </p>
             </div>
 
             <div className="space-y-3 pt-2">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Adresse Email <span className="text-red-500">*</span>
+                  Adresse Email du profil <span className="text-red-500">*</span>
                 </label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      value={email || user.email || ''}
+                      readOnly
                       placeholder="votre-email@domaine.com"
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none"
-                      disabled={emailOtpSent}
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium bg-slate-50 text-slate-500 outline-none cursor-not-allowed"
                     />
                   </div>
                   <button
                     type="button"
-                    onClick={handleSendEmailOtp}
-                    className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                    onClick={() => void handleSendEmailOtp()}
+                    disabled={isSubmitting}
+                    className="px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
                   >
-                    {emailOtpSent ? 'Renvoyer' : 'Envoyer OTP'}
+                    {isSubmitting ? 'Envoi...' : emailOtpSent ? 'Renvoyer le code' : 'Envoyer le code'}
                   </button>
                 </div>
+                <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                  <Info className="w-3 h-3" />
+                  Si votre profil n'a pas d'adresse email, mettez-la à jour avant de continuer.
+                </p>
               </div>
 
               {emailOtpSent && (
-                <div className="p-4 rounded-xl bg-orange-50 border border-orange-200 space-y-3">
+                <div className="p-4 rounded-xl bg-brand-primary/5 border border-brand-primary/20 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-orange-950">Code OTP reçu par Email</span>
-                    <span className="text-[10px] font-mono text-orange-700 font-bold bg-white px-2 py-0.5 rounded border border-orange-200">
-                      Code OTP : {generatedEmailCode}
+                    <span className="text-xs font-bold text-slate-800">Code de vérification reçu par Email</span>
+                    <span className="text-[10px] font-mono text-slate-500 font-bold bg-white px-2 py-0.5 rounded border border-slate-200">
+                      6 chiffres • 10 min
                     </span>
                   </div>
 
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      maxLength={4}
+                      inputMode="numeric"
+                      maxLength={6}
                       value={emailOtpCode}
-                      onChange={(e) => setEmailOtpCode(e.target.value)}
-                      placeholder="Code OTP"
-                      className="flex-1 py-2.5 px-4 text-center font-mono font-bold tracking-widest text-lg rounded-xl border border-orange-300 bg-white focus:ring-2 focus:ring-brand-primary outline-none"
+                      onChange={(e) => setEmailOtpCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="••••••"
+                      className="flex-1 py-2.5 px-4 text-center font-mono font-bold tracking-widest text-lg rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-brand-primary outline-none"
                     />
                     <button
                       type="button"
-                      onClick={handleVerifyEmailOtp}
-                      className="px-5 py-2.5 bg-brand-primary text-white rounded-xl text-xs font-bold hover:bg-orange-700 transition-colors cursor-pointer shrink-0"
+                      onClick={() => void handleVerifyEmailOtp()}
+                      disabled={isSubmitting || emailOtpCode.length < 6}
+                      className="px-5 py-2.5 bg-brand-primary text-white rounded-xl text-xs font-bold hover:bg-orange-700 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
                     >
-                      Valider l'OTP
+                      {isSubmitting ? 'Validation...' : 'Valider le code'}
                     </button>
                   </div>
                 </div>

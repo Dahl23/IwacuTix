@@ -31,8 +31,7 @@ import {
   X,
   Image as ImageIcon,
   Sun,
-  MailCheck,
-  UserX
+  MailCheck
 } from 'lucide-react';
 import { AuthModal } from '../components/AuthModal';
 import { PWAInstallButton } from '../components/PWAInstallButton';
@@ -68,10 +67,8 @@ export const ProfilePage: React.FC = () => {
   } = useApp();
   const [showEventSelector, setShowEventSelector] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [emailVerifyLoading, setEmailVerifyLoading] = useState(false);
   const [emailVerifySent, setEmailVerifySent] = useState(false);
-  const [deletingAccount, setDeletingAccount] = useState(false);
 
   // Profile Customization States
   const [showPhotoModal, setShowPhotoModal] = useState(false);
@@ -203,7 +200,7 @@ export const ProfilePage: React.FC = () => {
     },
     {
       label: 'Sécurité du compte (Email & Mot de passe)',
-      description: 'Vérification email, mot de passe & désactivation',
+      description: 'Vérification email et mot de passe',
       icon: ShieldCheck,
       action: () => navigate('/mot-de-passe-oublie')
     },
@@ -242,53 +239,6 @@ export const ProfilePage: React.FC = () => {
       setTimeout(() => setFeedback(null), 4000);
     }
   };
-
-  const handleDeactivate = async () => {
-    if (deletingAccount) return;
-    setDeletingAccount(true);
-    try {
-      await api.auth.desactiver();
-      logoutUser();
-      navigate('/');
-    } catch (err) {
-      const parsed = parseApiError(err);
-      setFeedback({ type: 'error', text: `Échec de la désactivation : ${parsed.message}` });
-      setDeletingAccount(false);
-      setShowDeactivateModal(false);
-      setTimeout(() => setFeedback(null), 4000);
-    }
-  };
-
-  const handleReactivate = async () => {
-    if (deletingAccount) return;
-    setDeletingAccount(true);
-    try {
-      await api.auth.reactiver();
-      const me = await api.auth.me();
-      if (me && me.nom_complet) {
-        updateUserProfile({
-          statut_compte: 'ACTIF',
-          name: me.nom_complet,
-          email: me.email || user.email,
-          phone: me.telephone || user.phone,
-          role: me.role,
-          email_verifie: me.email_verifie,
-        });
-      } else {
-        updateUserProfile({ statut_compte: 'ACTIF' });
-      }
-      setFeedback({ type: 'success', text: 'Votre compte a été réactivé avec succès !' });
-      setDeletingAccount(false);
-      setTimeout(() => setFeedback(null), 4000);
-    } catch (err) {
-      const parsed = parseApiError(err);
-      setFeedback({ type: 'error', text: `Échec de la réactivation : ${parsed.message}` });
-      setDeletingAccount(false);
-      setTimeout(() => setFeedback(null), 4000);
-    }
-  };
-
-  const isDeactivated = isUserVerified && user.statut_compte === 'DESACTIVE';
 
   return (
     <div className="flex-1 flex flex-col bg-[#F8FAFC] dark:bg-brand-dark transition-colors duration-200">
@@ -548,33 +498,6 @@ export const ProfilePage: React.FC = () => {
           </div>
         )}
 
-        {/* Compte désactivé → réactivation */}
-        {isDeactivated && (
-          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl space-y-2.5 shadow-sm">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-amber-500 text-white shrink-0">
-                <UserX className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-amber-900 dark:text-amber-100">
-                  Votre compte est désactivé
-                </p>
-                <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-snug">
-                  La billetterie et l'organisation d'événements sont suspendues jusqu'à réactivation.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={handleReactivate}
-              disabled={deletingAccount}
-              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
-            >
-              <Check className="w-3.5 h-3.5" />
-              {deletingAccount ? 'Réactivation en cours...' : 'Réactiver mon compte'}
-            </button>
-          </div>
-        )}
-
         {/* PWA Mobile App Installation Card */}
         <PWAInstallButton variant="profile" />
 
@@ -756,20 +679,6 @@ export const ProfilePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Désactivation du compte (suppression douce) */}
-        {isUserVerified && (
-          <div className="pt-1">
-            <button
-              id="btn-profile-deactivate"
-              onClick={() => setShowDeactivateModal(true)}
-              className="w-full p-3.5 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-red-700 tracking-wider uppercase transition-all cursor-pointer"
-            >
-              <UserX className="w-4 h-4" />
-              Désactiver mon compte
-            </button>
-          </div>
-        )}
-
         {/* Logout Row */}
         <div className="pt-2">
           <button
@@ -794,52 +703,6 @@ export const ProfilePage: React.FC = () => {
         onClose={() => setShowAuthModal(false)} 
         defaultTab={user.role === 'ORGANISATEUR' ? 'ORGANISATEUR' : 'ACHETEUR'}
       />
-
-      {/* Modal de confirmation de désactivation */}
-      {showDeactivateModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
-            <div className="p-4 bg-gradient-to-r from-red-500/10 via-red-500/5 to-red-500/10 border-b border-red-100 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-red-600 text-white shadow-xs">
-                  <UserX className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-display font-bold text-slate-900">Désactiver le compte</h3>
-                  <p className="text-[10px] text-slate-500">Suppression douce — réversible à tout moment</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowDeactivateModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-5 space-y-3">
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
-                <strong>Conséquences :</strong> vos billets restent valables, mais vous ne pourrez plus passer de nouvelles commandes, organiser d'événements ni vous connecter (jusqu'à réactivation).
-              </div>
-              <button
-                onClick={handleDeactivate}
-                disabled={deletingAccount}
-                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50 cursor-pointer active:scale-95"
-              >
-                {deletingAccount ? 'Désactivation en cours...' : 'Confirmer la désactivation'}
-                <UserX className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setShowDeactivateModal(false)}
-                disabled={deletingAccount}
-                className="w-full py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                Annuler
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Hidden File Input for Direct Local Image Upload */}
       <input

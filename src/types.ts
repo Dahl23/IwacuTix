@@ -61,10 +61,10 @@ export interface PortefeuilleOrganisateur {
 }
 
 export interface ParametrePlateforme {
-  delai_versement_jours: number; // e.g. 7 (hebdomadaire)
-  jour_execution_versement: string; // e.g. "DIMANCHE"
-  commission_taux_defaut: number; // e.g. 5 (%)
-  modifie_par: string;
+  id: string;
+  commission_taux_defaut: string; // "0.0200" (fraction décimale, ex. 2%)
+  canal_commission: 'LIGHTNING' | 'LUMICASH' | 'MANUEL';
+  destination_commission: string;
   date_modification: string;
 }
 
@@ -309,6 +309,7 @@ export interface OrganisateurProfilApi {
   id: string;
   telephone: string;
   email: string;
+  email_verifie: boolean;
   nom_entreprise: string;
   canal_reception: 'LIGHTNING' | 'LUMICASH';
   destination_reception: string;

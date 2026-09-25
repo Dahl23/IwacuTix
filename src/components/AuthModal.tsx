@@ -3,11 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { 
   X, 
   KeyRound, 
-  ArrowRight, 
   CheckCircle2, 
   ShieldCheck, 
   AlertCircle,
-  Clock,
   Building2,
   Sparkles,
   Info,
@@ -59,7 +57,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(false);
-  const [deactivated, setDeactivated] = useState(false);
 
   if (!isOpen) return null;
 
@@ -163,34 +160,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setStoredTokens(res.access, res.refresh);
       applyUser(res.user);
 
-      if (res.user.statut_compte === 'DESACTIVE') {
-        setDeactivated(true);
-        setSuccessMsg('Votre compte est actuellement désactivé.');
-        return;
-      }
-
       setSuccessMsg(`Connexion réussie (${res.user.role}) !`);
       finishSuccess(res.user.role);
-    } catch (err) {
-      setError(parseApiError(err).message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 4. Réactivation du compte désactivé (JWT encore valide)
-  const handleReactivate = async () => {
-    if (loading) return;
-    setError(null);
-    setSuccessMsg(null);
-    setLoading(true);
-    try {
-      await api.auth.reactiver();
-      const me = await api.auth.me();
-      applyUser(me);
-      setDeactivated(false);
-      setSuccessMsg('Compte réactivé avec succès ! Bienvenue. 🎉');
-      finishSuccess(me.role);
     } catch (err) {
       setError(parseApiError(err).message);
     } finally {
@@ -286,24 +257,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
 
           {/* Compte désactivé → réactivation */}
-          {deactivated ? (
-            <form onSubmit={(e) => { e.preventDefault(); handleReactivate(); }} className="space-y-3.5">
-              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
-                <strong>Votre compte est désactivé.</strong> Vous ne pouvez plus passer de commande ni organiser d'événements tant qu'il est désactivé. Vous pouvez le réactiver immédiatement.
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50 cursor-pointer active:scale-95"
-              >
-                {loading ? 'Réactivation en cours...' : 'Réactiver mon compte'}
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-              <p className="text-[10px] text-slate-400 text-center">
-                Au-delà de la réactivation, votre compte reprend son état normal (ACTIF).
-              </p>
-            </form>
-          ) : mode === 'REGISTER' ? (
+          {mode === 'REGISTER' ? (
             <form onSubmit={handleRegister} className="space-y-3">
               {/* Nom complet */}
               <div className="space-y-1 text-left">

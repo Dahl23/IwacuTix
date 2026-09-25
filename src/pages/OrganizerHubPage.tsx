@@ -18,13 +18,12 @@ import {
   AlertCircle,
   Clock,
   MapPin,
-  Power,
-  RotateCcw,
   ChevronRight,
   Sparkles,
   BarChart3,
   Search,
-  UserPlus
+  UserPlus,
+  Trash2
 } from 'lucide-react';
 
 export const OrganizerHubPage: React.FC = () => {
@@ -35,6 +34,7 @@ export const OrganizerHubPage: React.FC = () => {
     tickets, 
     scanneurAssignments, 
     assignScanneur, 
+    removeScanneurAssignment,
     isUserVerified,
     openAuthModal
   } = useApp();
@@ -177,26 +177,25 @@ export const OrganizerHubPage: React.FC = () => {
     setTimeout(() => setScannerSuccessMsg(''), 4000);
   };
 
-  const handleToggleScanner = async (assignmentId: string, deactiver: boolean) => {
+  const handleRemoveScanner = async (assignmentId: string, scannerNom: string) => {
+    if (!window.confirm(`Retirer « ${scannerNom} » de la liste des scanneurs habilités pour cet événement ? Ce retrait est définitif.`)) {
+      return;
+    }
     if (monProfilId) {
       try {
-        if (deactiver) {
-          await api.organisateurs.desactiverScanneur(monProfilId, assignmentId);
-        }
+        await api.organisateurs.retirerScanneur(monProfilId, assignmentId);
         const scans = await api.organisateurs.getScanneurs(monProfilId);
         if (scans && scans.results) setApiScanners(scans.results);
+        setScannerSuccessMsg(`Accès scanneur de « ${scannerNom} » retiré.`);
+        setTimeout(() => setScannerSuccessMsg(''), 4000);
         return;
       } catch {}
     }
-    // Repli local (backend indisponible) : basculer l'état actif côté contexte
-    const target = displayScanners.find((a) => a.id === assignmentId);
-    if (target) {
-      const updated = displayScanners.map((a) =>
-        a.id === assignmentId ? { ...a, actif: deactiver ? false : true } : a
-      );
-      setApiScanners(updated);
-      assignScanneur(target.user_nom, target.user_telephone.replace(/^\+257\s*/, ''), target.event_id);
-    }
+    // Repli local (backend indisponible) : retirer l'assignation côté contexte
+    setApiScanners((prev) => (prev === null ? prev : prev.filter((a) => a.id !== assignmentId)));
+    removeScanneurAssignment(assignmentId);
+    setScannerSuccessMsg(`Accès scanneur de « ${scannerNom} » retiré.`);
+    setTimeout(() => setScannerSuccessMsg(''), 4000);
   };
 
   const formatPrice = (price: number) => {
@@ -644,28 +643,18 @@ export const OrganizerHubPage: React.FC = () => {
                   {displayScanners.map((scanner) => (
                     <div
                       key={scanner.id}
-                      className={`p-3.5 bg-white hover:bg-slate-50 transition-colors flex items-center justify-between gap-3 ${
-                        scanner.actif === false ? 'opacity-60' : ''
-                      }`}
+                      className="p-3.5 bg-white hover:bg-slate-50 transition-colors flex items-center justify-between gap-3"
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
-                          scanner.actif === false ? 'bg-slate-200 text-slate-500' : 'bg-purple-100 text-purple-700'
-                        }`}>
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 bg-purple-100 text-purple-700">
                           <QrCode className="w-4 h-4" />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-slate-900">{scanner.user_nom}</span>
-                            {scanner.actif === false ? (
-                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold">
-                                Désactivé
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
-                                Actif
-                              </span>
-                            )}
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
+                              Actif
+                            </span>
                           </div>
                           <div className="text-[11px] text-slate-500 flex items-center gap-2">
                             <span>📞 {scanner.user_telephone}</span>
@@ -675,23 +664,13 @@ export const OrganizerHubPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {scanner.actif === false ? (
-                        <button
-                          onClick={() => void handleToggleScanner(scanner.id, false)}
-                          className="p-2 text-slate-500 hover:text-emerald-600 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
-                          title="Réactiver l'accès scanneur"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => void handleToggleScanner(scanner.id, true)}
-                          className="p-2 text-slate-400 hover:text-amber-600 rounded-lg hover:bg-amber-50 transition-colors cursor-pointer"
-                          title="Désactiver l'accès scanneur (conservé pour cet événement)"
-                        >
-                          <Power className="w-4 h-4" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => void handleRemoveScanner(scanner.id, scanner.user_nom)}
+                        className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                        title="Retirer l'accès scanneur (définitif)"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   ))}
                 </div>

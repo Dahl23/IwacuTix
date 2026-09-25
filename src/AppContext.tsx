@@ -86,7 +86,7 @@ interface AppContextType {
 
   // SuperAdmin Platform parameters & KYC (Section 5 & 6.E)
   parametrePlateforme: ParametrePlateforme;
-  updateParametrePlateforme: (delaiJours: number, commissionTaux: number) => void;
+  updateParametrePlateforme: (params: Partial<ParametrePlateforme>) => void;
   organisateursKyc: PlatformKycEntry[];
   updateOrganisateurKyc: (id: string, statut: 'VERIFIE' | 'REJETE') => void;
   versements: Versement[];
@@ -361,10 +361,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     derniere_maj: '-'
   });
   const [parametrePlateforme, setParametrePlateforme] = useState<ParametrePlateforme>({
-    delai_versement_jours: 7,
-    jour_execution_versement: 'DIMANCHE',
-    commission_taux_defaut: 5,
-    modifie_par: '-',
+    id: '',
+    commission_taux_defaut: '0.0200',
+    canal_commission: 'LIGHTNING',
+    destination_commission: '',
     date_modification: '-'
   });
   const [organisateursKyc, setOrganisateursKyc] = useState<PlatformKycEntry[]>([]);
@@ -608,12 +608,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setScanneurAssignments(prev => prev.filter(a => a.id !== assignmentId));
   };
 
-  const updateParametrePlateforme = (delaiJours: number, commissionTaux: number) => {
+  const updateParametrePlateforme = (params: Partial<ParametrePlateforme>) => {
     setParametrePlateforme({
-      delai_versement_jours: delaiJours,
-      jour_execution_versement: 'DIMANCHE',
-      commission_taux_defaut: commissionTaux,
-      modifie_par: user.name,
+      ...parametrePlateforme,
+      ...params,
       date_modification: 'À l\'instant'
     });
   };

@@ -42,7 +42,7 @@ export const ResetPasswordPage: React.FC = () => {
 
     setLoading(true);
     try {
-      const res = await api.auth.passwordResetConfirm({
+      await api.auth.passwordResetConfirm({
         identifiant: identifiant.trim(),
         code: code.trim(),
         nouveau_mdp: nouveauMdp,
@@ -50,7 +50,7 @@ export const ResetPasswordPage: React.FC = () => {
       setConsumed(true);
       setFeedback({
         type: 'success',
-        text: res?.message || 'Mot de passe réinitialisé avec succès ! Vous pouvez maintenant vous connecter.',
+        text: 'Mot de passe réinitialisé avec succès ! Vous pouvez maintenant vous connecter.',
       });
       setTimeout(() => navigate('/'), 2500);
     } catch (err) {

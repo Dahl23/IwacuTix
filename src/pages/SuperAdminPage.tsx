@@ -32,8 +32,9 @@ export const SuperAdminPage: React.FC = () => {
     tickets
   } = useApp();
 
-  const [delaiJours, setDelaiJours] = useState(parametrePlateforme.delai_versement_jours);
   const [commissionTaux, setCommissionTaux] = useState(parametrePlateforme.commission_taux_defaut);
+  const [canalCommission, setCanalCommission] = useState<ParametrePlateforme['canal_commission']>(parametrePlateforme.canal_commission);
+  const [destinationCommission, setDestinationCommission] = useState(parametrePlateforme.destination_commission);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   // Données réelles /api/admin/...
@@ -47,8 +48,9 @@ export const SuperAdminPage: React.FC = () => {
       try {
         const p = await api.admin.getParametresPlateforme();
         setParamsData(p);
-        setDelaiJours(p.delai_versement_jours);
         setCommissionTaux(p.commission_taux_defaut);
+        setCanalCommission(p.canal_commission);
+        setDestinationCommission(p.destination_commission);
       } catch {}
       try {
         const s = await api.admin.getStats();
@@ -69,12 +71,18 @@ export const SuperAdminPage: React.FC = () => {
     e.preventDefault();
     try {
       const updated = await api.admin.updateParametresPlateforme({
-        delai_versement_jours: delaiJours,
         commission_taux_defaut: commissionTaux,
+        canal_commission: canalCommission,
+        destination_commission: destinationCommission,
       });
       setParamsData(updated);
+      updateParametrePlateforme(updated);
     } catch {
-      updateParametrePlateforme(delaiJours, commissionTaux);
+      updateParametrePlateforme({
+        commission_taux_defaut: commissionTaux,
+        canal_commission: canalCommission,
+        destination_commission: destinationCommission,
+      });
     }
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
@@ -127,11 +135,13 @@ export const SuperAdminPage: React.FC = () => {
       }))
     : versements;
 
-  // Compute platform global stats
+  // Compute platform global stats (commission_taux_defaut = fraction décimale, ex. "0.0200" = 2%)
+  const commissionFraction = parseFloat(paramsData?.commission_taux_defaut ?? parametrePlateforme.commission_taux_defaut) || 0;
+  const commissionPct = Math.round(commissionFraction * 1000) / 10;
   const totalVolumeFbu = apiStats ? apiStats.total_fbu_affiche : tickets.reduce((sum, t) => sum + t.price, 0);
   const totalCommissionsFbu = apiStats
     ? apiStats.total_commission_sats
-    : Math.round(totalVolumeFbu * ((paramsData?.commission_taux_defaut ?? parametrePlateforme.commission_taux_defaut) / 100));
+    : Math.round(totalVolumeFbu * commissionFraction);
 
   return (
     <div className="flex-1 flex flex-col bg-[#F8FAFC]">
@@ -176,7 +186,7 @@ export const SuperAdminPage: React.FC = () => {
 
           <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs space-y-1">
             <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">
-              Commissions Collectées ({(paramsData?.commission_taux_defaut ?? parametrePlateforme.commission_taux_defaut)}%)
+              Commissions Collectées ({commissionPct}%)
             </span>
             <div className="text-base font-display font-bold text-brand-primary">
               {apiStats
@@ -207,48 +217,56 @@ export const SuperAdminPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-[10px] font-mono uppercase text-slate-500 font-bold block">
-                  Délai de versement (Jours)
+                  Commission par défaut (décimale)
                 </label>
                 <div className="relative">
                   <input
-                    type="number"
-                    min="1"
-                    max="30"
-                    value={delaiJours}
-                    onChange={(e) => setDelaiJours(Number(e.target.value))}
-                    className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                  />
-                  <span className="absolute right-2.5 top-2 text-[10px] font-mono text-slate-400">
-                    jours
-                  </span>
-                </div>
-                <p className="text-[9px] text-slate-400">
-                  Par défaut 7 jours (reversement automatique hebdomadaire le Dimanche).
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-mono uppercase text-slate-500 font-bold block">
-                  Commission par défaut (%)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min="0"
-                    max="20"
-                    step="0.5"
+                    type="text"
+                    inputMode="decimal"
                     value={commissionTaux}
-                    onChange={(e) => setCommissionTaux(Number(e.target.value))}
+                    onChange={(e) => setCommissionTaux(e.target.value)}
+                    placeholder="0.0200"
                     className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-primary"
                   />
                   <span className="absolute right-2.5 top-2 text-[10px] font-mono text-slate-400">
-                    %
+                    ex. 0.0200 = 2%
                   </span>
                 </div>
                 <p className="text-[9px] text-slate-400">
                   Retenue automatiquement sur les flux Mobile Money & Lightning.
                 </p>
               </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono uppercase text-slate-500 font-bold block">
+                  Canal de la commission
+                </label>
+                <select
+                  value={canalCommission}
+                  onChange={(e) => setCanalCommission(e.target.value as ParametrePlateforme['canal_commission'])}
+                  className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                >
+                  <option value="LIGHTNING">Lightning (Bitcoin)</option>
+                  <option value="LUMICASH">Lumicash</option>
+                  <option value="MANUEL">Manuel</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono uppercase text-slate-500 font-bold block">
+                Destination de la commission
+              </label>
+              <input
+                type="text"
+                value={destinationCommission}
+                onChange={(e) => setDestinationCommission(e.target.value)}
+                placeholder="Adresse Lightning (ex. vitawallet@blink.sv) ou numéro MM"
+                className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+              />
+              <p className="text-[9px] text-slate-400">
+                Adresse ou numéro où créditer la commission plateforme à chaque encaissement.
+              </p>
             </div>
 
             <div className="flex items-center justify-between pt-1">

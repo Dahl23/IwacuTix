@@ -300,15 +300,15 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Automated Weekly Payout Notice (Section 6.E) */}
+          {/* Reversement de la commission plateforme configurée (Section 8 ParametrePlateforme) */}
           <div className="p-2.5 rounded-xl bg-slate-850/80 border border-slate-700/60 text-[10px] text-slate-300 flex items-start gap-2">
             <Clock className="w-3.5 h-3.5 text-brand-primary shrink-0 mt-0.5" />
             <div className="space-y-0.5 leading-snug">
               <span className="font-semibold text-white">
-                Reversement Automatique Hebdomadaire ({parametrePlateforme.jour_execution_versement})
+                Commission plateforme {Math.round((parseFloat(parametrePlateforme.commission_taux_defaut) || 0) * 100)}%
               </span>
               <p className="text-slate-400 text-[9.5px]">
-                IwacuTix reverse automatiquement vos fonds tous les {parametrePlateforme.delai_versement_jours} jours (commission {parametrePlateforme.commission_taux_defaut}% déduite à la source).
+                Canal {parametrePlateforme.canal_commission} • Vers {parametrePlateforme.destination_commission || 'destination configurée par l’administration'}.
               </p>
             </div>
           </div>
