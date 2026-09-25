@@ -25,11 +25,33 @@ import {
 
 // Configuration de l'URL de base selon la documentation
 // URL officielle du backend Render : https://iwacutix-api.onrender.com
-const metaEnv = (import.meta as unknown as { env?: Record<string, string> }).env;
-export const API_BASE_URL = 
-  metaEnv?.VITE_API_BASE_URL || 
-  metaEnv?.VITE_API_URL || 
-  'https://iwacutix-api.onrender.com';
+// Prise en charge de la configuration dynamique (localStorage > env > défaut)
+export const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem('iwacutix_api_base_url');
+    if (custom && custom.trim()) {
+      return custom.trim().replace(/\/+$/, '');
+    }
+  }
+  const metaEnv = (import.meta as unknown as { env?: Record<string, string> }).env;
+  return (
+    metaEnv?.VITE_API_BASE_URL || 
+    metaEnv?.VITE_API_URL || 
+    'https://iwacutix-api.onrender.com'
+  ).replace(/\/+$/, '');
+};
+
+export const setApiBaseUrl = (newUrl: string): void => {
+  if (typeof window !== 'undefined') {
+    if (!newUrl || !newUrl.trim()) {
+      localStorage.removeItem('iwacutix_api_base_url');
+    } else {
+      localStorage.setItem('iwacutix_api_base_url', newUrl.trim().replace(/\/+$/, ''));
+    }
+  }
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 const ACCESS_TOKEN_KEY = 'iwacutix_access_token';
 const REFRESH_TOKEN_KEY = 'iwacutix_refresh_token';
@@ -79,7 +101,8 @@ async function request<T>(
   options: RequestInit = {}, 
   isRetry = false
 ): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
   const headers = new Headers(options.headers || {});
 
   // Injection du Bearer token si présent
@@ -88,17 +111,27 @@ async function request<T>(
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
-  // Content-Type par défaut si body JSON (ne pas définir si multipart/FormData)
-  if (options.body && typeof options.body === 'string' && !headers.has('Content-Type')) {
+  // Ne JAMAIS forcer Content-Type si multipart/FormData (le navigateur insère son boundary)
+  if (options.body instanceof FormData) {
+    headers.delete('Content-Type');
+  } else if (options.body && typeof options.body === 'string' && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
+
+  // Timeout de sécurité de 35s pour éviter les blocages infinis
+  const controller = new AbortController();
+  const timeoutMs = options.body instanceof FormData ? 45000 : 30000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const signal = options.signal || controller.signal;
 
   try {
     const response = await fetch(url, {
       ...options,
       headers,
+      signal,
     });
 
+    clearTimeout(timeoutId);
     isBackendLive = true;
 
     // Gestion du 401 JWT et rafraîchissement ROTATE_REFRESH_TOKENS
@@ -114,7 +147,7 @@ async function request<T>(
         if (!isRefreshing) {
           isRefreshing = true;
           try {
-            const refreshRes = await fetch(`${API_BASE_URL}/api/auth/token/refresh/`, {
+            const refreshRes = await fetch(`${baseUrl}/api/auth/token/refresh/`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ refresh: refreshToken }),
@@ -159,7 +192,18 @@ async function request<T>(
       try {
         errorBody = await response.json();
       } catch {
-        errorBody = { error: response.statusText, code: 'http_error' };
+        // En cas de code d'erreur HTTP renvoyant du HTML (ex. 502 Bad Gateway Cloudflare/Render)
+        if (response.status === 502 || response.status === 503 || response.status === 504) {
+          errorBody = {
+            error: `Le serveur API (${response.status}) est momentanément inaccessible ou en cours de réveil (Render). Veuillez patienter quelques instants et réessayer.`,
+            code: 'backend_indisponible'
+          };
+        } else {
+          errorBody = {
+            error: response.statusText || `Erreur HTTP ${response.status}`,
+            code: 'http_error'
+          };
+        }
       }
       throw errorBody;
     }
@@ -170,12 +214,26 @@ async function request<T>(
 
     return await response.json();
   } catch (err: any) {
-    // Si le serveur distant ne répond pas temporairement (cold start Render), fallback gracieux
-    if (err instanceof TypeError && err.message.includes('fetch')) {
-      isBackendLive = false;
-      console.warn(`[IwacuTix API] Backend ${API_BASE_URL} momentanément inaccessible. Fallback local.`);
-      return rejectBackendUnavailable<T>(endpoint, options);
+    clearTimeout(timeoutId);
+
+    // Timeout spécifique
+    if (err?.name === 'AbortError') {
+      throw {
+        error: 'La requête a expiré. Le serveur backend met trop de temps à répondre.',
+        code: 'timeout',
+      };
     }
+
+    // Si le serveur distant ne répond pas (cold start ou hors-ligne)
+    if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
+      isBackendLive = false;
+      console.warn(`[IwacuTix API] Backend ${baseUrl} momentanément inaccessible.`);
+      throw {
+        error: `Impossible de contacter le serveur backend (${baseUrl}). Vérifiez la connexion ou réessayez dans quelques secondes.`,
+        code: 'backend_indisponible',
+      };
+    }
+
     throw err;
   }
 }

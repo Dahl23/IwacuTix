@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { api, API_BASE_URL } from '../services/apiClient';
+import { api, API_BASE_URL, getStoredAccessToken, getApiBaseUrl } from '../services/apiClient';
 import { toAbsoluteApiUrl } from '../services/apiMappers';
 import { parseApiError } from '../utils/apiErrors';
 import { DemandeOrganisateur } from '../types';
@@ -22,101 +22,141 @@ import {
   Phone,
   Trash2,
   ExternalLink,
-  Eye
+  Eye,
+  Server
 } from 'lucide-react';
 
 /**
  * Assemble les deux photos (Recto et Verso) de la Carte Nationale d'Identité
  * en un document composite haute résolution pour le champ document_verification du backend.
+ * Garanti 100% sans blocage avec un timeout de sécurité de 1.5s et repli immédiat.
  */
-async function createMergedIdDocument(rectoFile: File, versoFile: File): Promise<File> {
+async function createMergedIdDocument(rectoFile: File, versoFile: File | null): Promise<File> {
+  if (!versoFile) {
+    return rectoFile;
+  }
+
   const isRectoImage = rectoFile.type.startsWith('image/');
   const isVersoImage = versoFile.type.startsWith('image/');
 
-  // Si l'un des deux est un PDF, on retourne rectoFile en document principal
-  // (les deux fichiers sont également transmis individuellement dans FormData)
+  // Si l'un des deux n'est pas une image (ex. PDF), on transmet le rectoFile en document principal
   if (!isRectoImage || !isVersoImage) {
     return rectoFile;
   }
 
-  return new Promise((resolve) => {
-    const imgRecto = new Image();
-    const imgVerso = new Image();
-    let loadedCount = 0;
+  return new Promise<File>((resolve) => {
+    let resolved = false;
+    let urlRecto = '';
+    let urlVerso = '';
 
-    const onImageLoaded = () => {
-      loadedCount++;
-      if (loadedCount < 2) return;
-
-      try {
-        const maxWidth = 1200;
-        const scaleRecto = maxWidth / (imgRecto.width || 1200);
-        const rWidth = maxWidth;
-        const rHeight = Math.round((imgRecto.height || 750) * scaleRecto);
-
-        const scaleVerso = maxWidth / (imgVerso.width || 1200);
-        const vWidth = maxWidth;
-        const vHeight = Math.round((imgVerso.height || 750) * scaleVerso);
-
-        const bannerHeight = 44;
-        const padding = 16;
-        const totalHeight = rHeight + vHeight + (bannerHeight * 2) + (padding * 3);
-
-        const canvas = document.createElement('canvas');
-        canvas.width = maxWidth;
-        canvas.height = totalHeight;
-        const ctx = canvas.getContext('2d');
-
-        if (!ctx) {
-          resolve(rectoFile);
-          return;
-        }
-
-        // Fond moderne sombre
-        ctx.fillStyle = '#0F172A';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Bandeau Titre Recto
-        ctx.fillStyle = '#1E293B';
-        ctx.fillRect(0, 0, maxWidth, bannerHeight);
-        ctx.fillStyle = '#F97316';
-        ctx.font = 'bold 18px ui-sans-serif, system-ui, sans-serif';
-        ctx.fillText("CARTE NATIONALE D'IDENTITÉ — RECTO (FACE AVANT)", 20, 28);
-
-        // Image Recto
-        ctx.drawImage(imgRecto, 0, bannerHeight, rWidth, rHeight);
-
-        // Bandeau Titre Verso
-        const versoBannerY = bannerHeight + rHeight + padding;
-        ctx.fillStyle = '#1E293B';
-        ctx.fillRect(0, versoBannerY, maxWidth, bannerHeight);
-        ctx.fillStyle = '#F97316';
-        ctx.font = 'bold 18px ui-sans-serif, system-ui, sans-serif';
-        ctx.fillText("CARTE NATIONALE D'IDENTITÉ — VERSO (FACE ARRIÈRE)", 20, versoBannerY + 28);
-
-        // Image Verso
-        const versoImageY = versoBannerY + bannerHeight;
-        ctx.drawImage(imgVerso, 0, versoImageY, vWidth, vHeight);
-
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const composite = new File([blob], `cni_recto_verso_${Date.now()}.jpg`, { type: 'image/jpeg' });
-            resolve(composite);
-          } else {
-            resolve(rectoFile);
-          }
-        }, 'image/jpeg', 0.92);
-      } catch (err) {
-        console.warn('[OrganizerKyc] Erreur fusion recto/verso canvas :', err);
-        resolve(rectoFile);
-      }
+    const safeResolve = (file: File) => {
+      if (resolved) return;
+      resolved = true;
+      if (urlRecto) URL.revokeObjectURL(urlRecto);
+      if (urlVerso) URL.revokeObjectURL(urlVerso);
+      resolve(file);
     };
 
-    imgRecto.onerror = () => resolve(rectoFile);
-    imgVerso.onerror = () => resolve(rectoFile);
+    // Timeout de repli automatique : au-delà de 1.5s, on ne bloque jamais l'utilisateur
+    const timer = setTimeout(() => {
+      safeResolve(rectoFile);
+    }, 1500);
 
-    imgRecto.src = URL.createObjectURL(rectoFile);
-    imgVerso.src = URL.createObjectURL(versoFile);
+    try {
+      const imgRecto = new Image();
+      const imgVerso = new Image();
+      let loadedCount = 0;
+
+      const onImageLoaded = () => {
+        loadedCount++;
+        if (loadedCount < 2) return;
+
+        try {
+          const maxWidth = 1200;
+          const scaleRecto = maxWidth / (imgRecto.naturalWidth || imgRecto.width || 1200);
+          const rWidth = maxWidth;
+          const rHeight = Math.round((imgRecto.naturalHeight || imgRecto.height || 750) * scaleRecto);
+
+          const scaleVerso = maxWidth / (imgVerso.naturalWidth || imgVerso.width || 1200);
+          const vWidth = maxWidth;
+          const vHeight = Math.round((imgVerso.naturalHeight || imgVerso.height || 750) * scaleVerso);
+
+          const bannerHeight = 44;
+          const padding = 16;
+          const totalHeight = rHeight + vHeight + (bannerHeight * 2) + (padding * 3);
+
+          const canvas = document.createElement('canvas');
+          canvas.width = maxWidth;
+          canvas.height = totalHeight;
+          const ctx = canvas.getContext('2d');
+
+          if (!ctx) {
+            clearTimeout(timer);
+            safeResolve(rectoFile);
+            return;
+          }
+
+          // Fond moderne sombre
+          ctx.fillStyle = '#0F172A';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // Bandeau Titre Recto
+          ctx.fillStyle = '#1E293B';
+          ctx.fillRect(0, 0, maxWidth, bannerHeight);
+          ctx.fillStyle = '#F97316';
+          ctx.font = 'bold 18px ui-sans-serif, system-ui, sans-serif';
+          ctx.fillText("CARTE NATIONALE D'IDENTITÉ — RECTO (FACE AVANT)", 20, 28);
+
+          // Image Recto
+          ctx.drawImage(imgRecto, 0, bannerHeight, rWidth, rHeight);
+
+          // Bandeau Titre Verso
+          const versoBannerY = bannerHeight + rHeight + padding;
+          ctx.fillStyle = '#1E293B';
+          ctx.fillRect(0, versoBannerY, maxWidth, bannerHeight);
+          ctx.fillStyle = '#F97316';
+          ctx.font = 'bold 18px ui-sans-serif, system-ui, sans-serif';
+          ctx.fillText("CARTE NATIONALE D'IDENTITÉ — VERSO (FACE ARRIÈRE)", 20, versoBannerY + 28);
+
+          // Image Verso
+          const versoImageY = versoBannerY + bannerHeight;
+          ctx.drawImage(imgVerso, 0, versoImageY, vWidth, vHeight);
+
+          canvas.toBlob((blob) => {
+            clearTimeout(timer);
+            if (blob) {
+              const composite = new File([blob], `cni_recto_verso_${Date.now()}.jpg`, { type: 'image/jpeg' });
+              safeResolve(composite);
+            } else {
+              safeResolve(rectoFile);
+            }
+          }, 'image/jpeg', 0.90);
+        } catch (err) {
+          console.warn('[OrganizerKyc] Erreur fusion canvas :', err);
+          clearTimeout(timer);
+          safeResolve(rectoFile);
+        }
+      };
+
+      const onError = () => {
+        clearTimeout(timer);
+        safeResolve(rectoFile);
+      };
+
+      // Attachement strict des écouteurs AVANT d'assigner .src
+      imgRecto.onload = onImageLoaded;
+      imgVerso.onload = onImageLoaded;
+      imgRecto.onerror = onError;
+      imgVerso.onerror = onError;
+
+      urlRecto = URL.createObjectURL(rectoFile);
+      urlVerso = URL.createObjectURL(versoFile);
+      imgRecto.src = urlRecto;
+      imgVerso.src = urlVerso;
+    } catch (err) {
+      clearTimeout(timer);
+      safeResolve(rectoFile);
+    }
   });
 }
 
@@ -135,7 +175,7 @@ export const OrganizerKycPage: React.FC = () => {
   const [telephoneContact, setTelephoneContact] = useState(user.phone || '');
   const [justification, setJustification] = useState('');
 
-  // Deux pièces requises : Recto et Verso de la CNI
+  // Deux pièces : Recto (requis) et Verso (recommandé) de la CNI
   const [rectoFile, setRectoFile] = useState<File | null>(null);
   const [rectoPreviewUrl, setRectoPreviewUrl] = useState<string>('');
 
@@ -155,8 +195,10 @@ export const OrganizerKycPage: React.FC = () => {
     if (isManualRefresh) setRefreshing(true);
     try {
       const res = await api.organisateurs.getMesDemandes();
-      if (res && Array.isArray(res)) {
+      if (Array.isArray(res)) {
         setDemandes(res);
+      } else if (res && Array.isArray((res as any).results)) {
+        setDemandes((res as any).results);
       }
     } catch (err) {
       console.warn('[OrganizerKyc] Erreur récupération demandes :', err);
@@ -208,6 +250,13 @@ export const OrganizerKycPage: React.FC = () => {
       return;
     }
 
+    const token = getStoredAccessToken();
+    if (!token) {
+      setErrorMsg("Session non authentifiée. Veuillez vous connecter pour soumettre votre dossier.");
+      openAuthModal('ORGANISATEUR');
+      return;
+    }
+
     if (!nomLegal.trim()) {
       setErrorMsg('Veuillez renseigner votre nom complet légal.');
       return;
@@ -223,18 +272,15 @@ export const OrganizerKycPage: React.FC = () => {
       return;
     }
 
-    if (!versoFile) {
-      setErrorMsg("Veuillez téléverser la face arrière (Verso) de votre carte nationale d'identité.");
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
-      // 1. Assemblage composite des deux faces (Recto + Verso)
+      // 1. Assemblage composite des deux faces (Recto + Verso) garanti sans blocage
       const combinedDocument = await createMergedIdDocument(rectoFile, versoFile);
 
-      // 2. Construction du FormData complet avec pièces jointes
+      // 2. Construction du FormData complet selon la spécification API Section 2.5
+      // Spec: Body multipart: nom_entreprise (requis), document_verification (requis), 
+      // nom_structure (optionnel), justification (optionnel), telephone (optionnel)
       const formData = new FormData();
       formData.append('nom_entreprise', structureName.trim());
       formData.append('nom_structure', structureName.trim());
@@ -249,13 +295,15 @@ export const OrganizerKycPage: React.FC = () => {
         formData.append('telephone', telephoneContact.trim());
       }
 
-      // Document principal composite (contenant Recto et Verso)
+      // Document principal envoyé au backend
       formData.append('document_verification', combinedDocument);
 
-      // Champs spécifiques si le backend les prend en charge
+      // Pièces jointes individuelles pour compatibilité
       formData.append('document_recto', rectoFile);
-      formData.append('document_verso', versoFile);
-      formData.append('document_verification_verso', versoFile);
+      if (versoFile) {
+        formData.append('document_verso', versoFile);
+        formData.append('document_verification_verso', versoFile);
+      }
 
       // POST /api/organisateurs/demandes/
       const createdDemande = await api.organisateurs.soumettreDemande(formData);
@@ -263,7 +311,7 @@ export const OrganizerKycPage: React.FC = () => {
       // Récupération immédiate de la liste mise à jour via GET /api/organisateurs/demandes/mes/
       await fetchMesDemandes();
 
-      if (createdDemande) {
+      if (createdDemande && createdDemande.id) {
         setDemandes((prev) => [createdDemande, ...prev.filter((d) => d.id !== createdDemande.id)]);
       }
 
@@ -272,7 +320,8 @@ export const OrganizerKycPage: React.FC = () => {
       setRectoPreviewUrl('');
       setVersoFile(null);
       setVersoPreviewUrl('');
-    } catch (err) {
+    } catch (err: any) {
+      console.error('[OrganizerKyc] Erreur soumission demande :', err);
       const { message } = parseApiError(err);
       setErrorMsg(message || 'Impossible de soumettre la demande. Veuillez vérifier vos informations et réessayez.');
     } finally {
@@ -794,14 +843,46 @@ export const OrganizerKycPage: React.FC = () => {
               </div>
             </div>
 
+            {errorMsg && (
+              <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-start gap-2.5 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
+                <div className="flex-1">
+                  <span className="font-bold block">Échec de la transmission :</span>
+                  <span>{errorMsg}</span>
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={isSubmitting || !rectoFile || !versoFile || !structureName.trim()}
+              disabled={isSubmitting || !rectoFile || !structureName.trim()}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-orange-500/20 active:scale-95 transition-all mt-4 cursor-pointer"
             >
-              <span>{isSubmitting ? 'Transmission du dossier CNI...' : 'Soumettre au SuperAdmin'}</span>
-              <ArrowRight className="w-4 h-4" />
+              {isSubmitting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                  <span>Transmission du dossier CNI en cours...</span>
+                </>
+              ) : (
+                <>
+                  <span>Soumettre au SuperAdmin</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
+
+            {/* Indicateur de branchement de l'endpoint réel */}
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500">
+              <div className="flex items-center gap-1.5 truncate">
+                <Server className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span className="truncate">
+                  Endpoint : <code className="font-mono text-slate-700 font-bold">POST /api/organisateurs/demandes/</code>
+                </span>
+              </div>
+              <span className="font-mono text-[10px] text-slate-400 truncate max-w-[150px]" title={getApiBaseUrl()}>
+                {getApiBaseUrl().replace('https://', '').replace('http://', '')}
+              </span>
+            </div>
           </form>
         )}
 
