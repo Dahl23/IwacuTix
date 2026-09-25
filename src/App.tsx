@@ -17,6 +17,9 @@ import { OrganizerHubPage } from './pages/OrganizerHubPage';
 import { OrganizerKycPage } from './pages/OrganizerKycPage';
 import { ScannerPage } from './pages/ScannerPage';
 import { SuperAdminPage } from './pages/SuperAdminPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 
 
 function AppRoutes() {
@@ -84,6 +87,13 @@ function AppRoutes() {
 
           {/* 11. SuperAdmin Platform Parameters & KYC Supervision (Section 3 & 5) */}
           <Route path="/admin/superadmin" element={<SuperAdminPage />} />
+
+          {/* 12. Email verification (lien ?code= reçu par email) */}
+          <Route path="/verifier-email" element={<VerifyEmailPage />} />
+
+          {/* 13. Lost password flows (demande + confirmation ?code=&email=) */}
+          <Route path="/mot-de-passe-oublie" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* Catch-all fallback */}
           <Route path="*" element={<HomePage />} />

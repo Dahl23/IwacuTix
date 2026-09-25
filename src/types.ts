@@ -1,5 +1,5 @@
 export type UserRole = 'ACHETEUR' | 'ORGANISATEUR' | 'SUPERADMIN';
-export type UserAccountStatus = 'ACTIF' | 'SUSPENDU' | 'EN_ATTENTE_VERIFICATION';
+export type UserAccountStatus = 'ACTIF' | 'SUSPENDU' | 'EN_ATTENTE_VERIFICATION' | 'DESACTIVE';
 
 export interface OrganisateurProfile {
   user_id: string;
@@ -27,10 +27,12 @@ export interface User {
   name: string;
   phone: string;
   email: string;
+  username?: string;
   avatarUrl: string;
   role: UserRole;
   statut_compte: UserAccountStatus;
   telephone_verifie: boolean;
+  email_verifie?: boolean;
   activeAssignmentEventId?: string; // Capacité de scan sur un événement précis
   organisateurProfile?: OrganisateurProfile;
   kycOrganisateur?: OrganisateurKyc;
@@ -180,9 +182,11 @@ export interface ApiAuthResponse {
     nom_complet: string;
     email: string | null;
     telephone: string;
+    username?: string | null;
     role: UserRole;
     statut_compte: UserAccountStatus;
     telephone_verifie: boolean;
+    email_verifie?: boolean;
     date_creation: string;
     url_photo_profil?: string | null;
   };

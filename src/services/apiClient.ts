@@ -1,5 +1,6 @@
 import { 
   ApiAuthResponse, 
+  ApiUser,
   ApiCommandePayload, 
   ApiCommandeResponse, 
   ApiCommandeOrder, 
@@ -101,7 +102,13 @@ async function request<T>(
     isBackendLive = true;
 
     // Gestion du 401 JWT et rafraîchissement ROTATE_REFRESH_TOKENS
-    if (response.status === 401 && !isRetry && !endpoint.includes('/auth/login/') && !endpoint.includes('/auth/verifier-otp/')) {
+    // Les endpoints publics d'authentification (login, register, password-reset) ne doivent
+    // JAMAIS déclencher un refresh : un 4xx y est une erreur métier, pas un JWT expiré.
+    const isPublicAuthEndpoint =
+      endpoint.includes('/auth/login/') ||
+      endpoint.includes('/auth/register/') ||
+      endpoint.includes('/auth/password-reset/');
+    if (response.status === 401 && !isRetry && !isPublicAuthEndpoint) {
       const refreshToken = getStoredRefreshToken();
       if (refreshToken) {
         if (!isRefreshing) {
@@ -185,40 +192,73 @@ function rejectBackendUnavailable<T>(_endpoint: string, _options: RequestInit): 
 // ---------------------------------------------------------------------------
 
 export const api = {
-  // 1. Authentification (Section 1)
+  // 1. Authentification (Section 1 — module accounts, flux identifiant + mot de passe)
   auth: {
-    // 1.1 Demander OTP SMS (+25779123456)
-    demanderOtp: (telephone: string) =>
-      request<{ message: string; telephone: string }>('/api/auth/demander-otp/', {
+    // 1.1 Inscription publique → compte ACHETEUR ACTIF immédiat, déjà connecté
+    register: (data: { email?: string; username?: string; telephone?: string; password: string; nom_complet?: string }) =>
+      request<ApiAuthResponse>('/api/auth/register/', {
         method: 'POST',
-        body: JSON.stringify({ telephone }),
+        body: JSON.stringify(data),
       }),
 
-    // 1.2 Valider OTP et obtenir tokens JWT
-    verifierOtp: (telephone: string, code: string) =>
-      request<ApiAuthResponse>('/api/auth/verifier-otp/', {
-        method: 'POST',
-        body: JSON.stringify({ telephone, code }),
-      }),
-
-    // 1.3 Login mot de passe pour Organisateur & SuperAdmin
+    // 1.2 Connexion commune à tous les rôles (email, username ou téléphone → résolution serveur)
+    // Erreur unique anti-énumération : 400 { detail: "Identifiant ou mot de passe incorrect." }
     login: (identifiant: string, password: string) =>
       request<ApiAuthResponse>('/api/auth/login/', {
         method: 'POST',
         body: JSON.stringify({ identifiant, password }),
       }),
 
-    // 1.4 Rafraîchir les jetons JWT (Rotate refresh tokens)
+    // 1.3 Rafraîchir les jetons JWT (rotation + BLACKLIST_AFTER_ROTATION: l'ancien refresh est révoqué)
     refreshToken: (refresh: string) =>
       request<{ access: string; refresh: string }>('/api/auth/token/refresh/', {
         method: 'POST',
         body: JSON.stringify({ refresh }),
       }),
 
-    // 1.5 Profil utilisateur connecté
-    me: () => request<ApiAuthResponse['user'] & { url_photo_profil?: string | null }>('/api/auth/me/'),
+    // 1.4 Profil utilisateur connecté (UserSerializer inclut username, email_verifie)
+    me: () => request<ApiUser>('/api/auth/me/'),
 
-    // 1.6 Mettre à jour la photo de profil (multipart/form-data)
+    // 1.5 Envoyer l'email de vérification (token valable 1h, throttlé verif_email 3/10min → 429)
+    verifierEmail: () =>
+      request<{ detail?: string; message?: string }>('/api/auth/me/verifier-email/', {
+        method: 'POST',
+      }),
+
+    // 1.5.b Confirmer l'email avec le token reçu (400 token_expire | token_invalide)
+    confirmerVerifierEmail: (code: string) =>
+      request<{ detail?: string; email_verifie?: boolean }>('/api/auth/me/verifier-email/confirmer/', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      }),
+
+    // 1.6 Demande de réinitialisation de mot de passe (réponse générique anti-énumération, 429 throttlé)
+    passwordResetRequest: (identifiant: string) =>
+      request<{ detail?: string; message?: string }>('/api/auth/password-reset/request/', {
+        method: 'POST',
+        body: JSON.stringify({ identifiant }),
+      }),
+
+    // 1.6.b Confirmer la réinitialisation (400 token_expire | token_invalide, 429 tentatives_epuisees)
+    passwordResetConfirm: (data: { identifiant: string; code: string; nouveau_mdp: string }) =>
+      request<{ detail?: string; message?: string }>('/api/auth/password-reset/confirm/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    // 1.7 Désactiver le compte (suppression douce → statut DESACTIVE, connexion/achats bloqués ensuite)
+    desactiver: () =>
+      request<{ detail?: string; statut_compte?: 'DESACTIVE' }>('/api/auth/me/desactiver/', {
+        method: 'POST',
+      }),
+
+    // 1.7.b Réactiver le compte (JWT encore valide → retour ACTIF)
+    reactiver: () =>
+      request<{ detail?: string; statut_compte?: 'ACTIF' }>('/api/auth/me/reactiver/', {
+        method: 'POST',
+      }),
+
+    // 1.8 Mettre à jour la photo de profil (multipart/form-data, redimensionnée 400×400)
     updatePhotoProfil: (photoFile: File) => {
       const formData = new FormData();
       formData.append('photo_profil', photoFile);
@@ -228,7 +268,7 @@ export const api = {
       });
     },
 
-    // 1.6 Supprimer la photo de profil
+    // 1.8.b Supprimer la photo de profil (retour à l'avatar par défaut)
     deletePhotoProfil: () =>
       request<any>('/api/auth/me/photo-profil/', {
         method: 'DELETE',

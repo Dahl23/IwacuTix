@@ -30,13 +30,16 @@ import {
   Edit3,
   X,
   Image as ImageIcon,
-  Sun
+  Sun,
+  MailCheck,
+  UserX
 } from 'lucide-react';
 import { AuthModal } from '../components/AuthModal';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { api, getStoredAccessToken, API_BASE_URL } from '../services/apiClient';
 import { toAbsoluteApiUrl } from '../services/apiMappers';
+import { parseApiError } from '../utils/apiErrors';
 import { DEFAULT_ANONYMOUS_AVATAR } from '../data';
 
 const AVATAR_PRESETS = [
@@ -65,6 +68,10 @@ export const ProfilePage: React.FC = () => {
   } = useApp();
   const [showEventSelector, setShowEventSelector] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [emailVerifyLoading, setEmailVerifyLoading] = useState(false);
+  const [emailVerifySent, setEmailVerifySent] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   // Profile Customization States
   const [showPhotoModal, setShowPhotoModal] = useState(false);
@@ -195,10 +202,10 @@ export const ProfilePage: React.FC = () => {
       action: () => alert(`Votre compte Mobile Money (${user.phone}) et portefeuille Lightning sont configurés.`)
     },
     {
-      label: 'Sécurité & Authentification OTP',
-      description: 'Authentification par SMS OTP actif (Section 3)',
+      label: 'Sécurité du compte (Email & Mot de passe)',
+      description: 'Vérification email, mot de passe & désactivation',
       icon: ShieldCheck,
-      action: () => alert('Compte lié au numéro de téléphone vérifié par code OTP unique.')
+      action: () => navigate('/mot-de-passe-oublie')
     },
     {
       label: 'Support technique IwacuTix',
@@ -214,6 +221,74 @@ export const ProfilePage: React.FC = () => {
       navigate('/');
     }
   };
+
+  const isEmailVerifiable =
+    isUserVerified &&
+    Boolean(user.email && user.email !== 'contact@iwacutix.bi') &&
+    user.email_verifie === false;
+
+  const handleSendVerifyEmail = async () => {
+    if (emailVerifyLoading) return;
+    setEmailVerifyLoading(true);
+    try {
+      await api.auth.verifierEmail();
+      setEmailVerifySent(true);
+      setFeedback({ type: 'success', text: 'Lien de vérification envoyé par email. Vérifiez votre boîte de réception.' });
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setFeedback({ type: 'error', text: parsed.message });
+    } finally {
+      setEmailVerifyLoading(false);
+      setTimeout(() => setFeedback(null), 4000);
+    }
+  };
+
+  const handleDeactivate = async () => {
+    if (deletingAccount) return;
+    setDeletingAccount(true);
+    try {
+      await api.auth.desactiver();
+      logoutUser();
+      navigate('/');
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setFeedback({ type: 'error', text: `Échec de la désactivation : ${parsed.message}` });
+      setDeletingAccount(false);
+      setShowDeactivateModal(false);
+      setTimeout(() => setFeedback(null), 4000);
+    }
+  };
+
+  const handleReactivate = async () => {
+    if (deletingAccount) return;
+    setDeletingAccount(true);
+    try {
+      await api.auth.reactiver();
+      const me = await api.auth.me();
+      if (me && me.nom_complet) {
+        updateUserProfile({
+          statut_compte: 'ACTIF',
+          name: me.nom_complet,
+          email: me.email || user.email,
+          phone: me.telephone || user.phone,
+          role: me.role,
+          email_verifie: me.email_verifie,
+        });
+      } else {
+        updateUserProfile({ statut_compte: 'ACTIF' });
+      }
+      setFeedback({ type: 'success', text: 'Votre compte a été réactivé avec succès !' });
+      setDeletingAccount(false);
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setFeedback({ type: 'error', text: `Échec de la réactivation : ${parsed.message}` });
+      setDeletingAccount(false);
+      setTimeout(() => setFeedback(null), 4000);
+    }
+  };
+
+  const isDeactivated = isUserVerified && user.statut_compte === 'DESACTIVE';
 
   return (
     <div className="flex-1 flex flex-col bg-[#F8FAFC] dark:bg-brand-dark transition-colors duration-200">
@@ -361,7 +436,7 @@ export const ProfilePage: React.FC = () => {
                 onClick={() => openAuthModal('GENERAL')}
                 className="mt-2.5 w-full py-2 px-4 rounded-xl bg-brand-primary hover:bg-orange-600 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
               >
-                <span>Créer mon compte Acheteur (Nom, Prénom & N°)</span>
+                <span>Se connecter / Créer mon compte</span>
               </button>
             </div>
           )}
@@ -382,7 +457,7 @@ export const ProfilePage: React.FC = () => {
 
           {isUserVerified && user.role === 'ACHETEUR' && currentPersona !== 'SCANNEUR' && (
             <p className="text-[10px] font-mono font-bold text-emerald-700 uppercase tracking-wider bg-emerald-50 px-2.5 py-1 rounded-full inline-block border border-emerald-200">
-              ACHETEUR AUTHENTIFIÉ (OTP) ✓
+              ACHETEUR AUTHENTIFIÉ ✓
             </p>
           )}
 
@@ -433,7 +508,7 @@ export const ProfilePage: React.FC = () => {
                 {hasJwt ? 'Session JWT Active' : 'Mode Démonstration'}
               </p>
               <p className="text-[9px] text-slate-400 font-mono">
-                {hasJwt ? 'Jeton Access (60m) & Refresh (7j) chargés' : 'Connectez-vous par SMS OTP ou login Pro'}
+                {hasJwt ? 'Jeton Access (60m) & Refresh (7j) chargés' : 'Connectez-vous avec votre email ou numéro'}
               </p>
             </div>
             <button
@@ -445,6 +520,60 @@ export const ProfilePage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Bandeau vérification email (compte créé puis email non vérifié) */}
+        {isEmailVerifiable && !emailVerifySent && (
+          <div className="p-3.5 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 rounded-2xl space-y-2.5 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-sky-600 text-white shrink-0">
+                <MailCheck className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-sky-900 dark:text-sky-100">
+                  Vérifiez votre adresse email
+                </p>
+                <p className="text-[10px] text-sky-700 dark:text-sky-300 leading-snug">
+                  Un lien de confirmation sera envoyé à <strong className="font-mono">{user.email}</strong> (valable 1 heure).
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleSendVerifyEmail}
+              disabled={emailVerifyLoading}
+              className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              {emailVerifyLoading ? 'Envoi en cours...' : 'Envoyer le lien de vérification'}
+            </button>
+          </div>
+        )}
+
+        {/* Compte désactivé → réactivation */}
+        {isDeactivated && (
+          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl space-y-2.5 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-amber-500 text-white shrink-0">
+                <UserX className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-amber-900 dark:text-amber-100">
+                  Votre compte est désactivé
+                </p>
+                <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-snug">
+                  La billetterie et l'organisation d'événements sont suspendues jusqu'à réactivation.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleReactivate}
+              disabled={deletingAccount}
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5" />
+              {deletingAccount ? 'Réactivation en cours...' : 'Réactiver mon compte'}
+            </button>
+          </div>
+        )}
 
         {/* PWA Mobile App Installation Card */}
         <PWAInstallButton variant="profile" />
@@ -627,6 +756,20 @@ export const ProfilePage: React.FC = () => {
           </div>
         </div>
 
+        {/* Désactivation du compte (suppression douce) */}
+        {isUserVerified && (
+          <div className="pt-1">
+            <button
+              id="btn-profile-deactivate"
+              onClick={() => setShowDeactivateModal(true)}
+              className="w-full p-3.5 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-red-700 tracking-wider uppercase transition-all cursor-pointer"
+            >
+              <UserX className="w-4 h-4" />
+              Désactiver mon compte
+            </button>
+          </div>
+        )}
+
         {/* Logout Row */}
         <div className="pt-2">
           <button
@@ -645,12 +788,58 @@ export const ProfilePage: React.FC = () => {
         </p>
       </div>
 
-      {/* Auth Modal for SMS OTP & Organizer Login */}
+      {/* Auth Modal for Register & Login (plus de flux OTP acheteur) */}
       <AuthModal 
         isOpen={showAuthModal} 
         onClose={() => setShowAuthModal(false)} 
         defaultTab={user.role === 'ORGANISATEUR' ? 'ORGANISATEUR' : 'ACHETEUR'}
       />
+
+      {/* Modal de confirmation de désactivation */}
+      {showDeactivateModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+            <div className="p-4 bg-gradient-to-r from-red-500/10 via-red-500/5 to-red-500/10 border-b border-red-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-red-600 text-white shadow-xs">
+                  <UserX className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-display font-bold text-slate-900">Désactiver le compte</h3>
+                  <p className="text-[10px] text-slate-500">Suppression douce — réversible à tout moment</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDeactivateModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
+                <strong>Conséquences :</strong> vos billets restent valables, mais vous ne pourrez plus passer de nouvelles commandes, organiser d'événements ni vous connecter (jusqu'à réactivation).
+              </div>
+              <button
+                onClick={handleDeactivate}
+                disabled={deletingAccount}
+                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50 cursor-pointer active:scale-95"
+              >
+                {deletingAccount ? 'Désactivation en cours...' : 'Confirmer la désactivation'}
+                <UserX className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setShowDeactivateModal(false)}
+                disabled={deletingAccount}
+                className="w-full py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hidden File Input for Direct Local Image Upload */}
       <input

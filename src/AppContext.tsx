@@ -12,7 +12,7 @@ import {
   ScanLog,
   ApiDestinataireBillet
 } from './types';
-import { api, API_BASE_URL, getStoredAccessToken } from './services/apiClient';
+import { api, API_BASE_URL, getStoredAccessToken, clearStoredTokens } from './services/apiClient';
 import { apiEventToEvent, apiTicketToPurchased, apiUserToUser } from './services/apiMappers';
 import { 
   DEFAULT_ANONYMOUS_AVATAR,
@@ -220,8 +220,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const saved = localStorage.getItem('iwacutix_user_profile');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // User must be verified with a valid phone number and real id
-        if (parsed && parsed.telephone_verifie === true && parsed.phone && parsed.phone.trim().length > 0 && parsed.id !== 'guest') {
+        // User must be a real registered account (register/login flow, plus de vérification OTP téléphone obligatoire)
+        if (parsed && parsed.id && parsed.id !== 'guest' && parsed.role && parsed.statut_compte === 'ACTIF') {
           if (!parsed.avatarUrl || parsed.avatarUrl.includes('photo-1534528741775-53994a69daeb')) {
             parsed.avatarUrl = DEFAULT_ANONYMOUS_AVATAR;
           }
@@ -233,13 +233,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return GUEST_USER;
   });
 
-  // Is user verified with real name, phone, and OTP SMS verification?
+  // Compte réel (register/login) & actif, quel que soit le rôle. La vérification OTP téléphone n'existe plus
+  // pour les acheteurs (remplacée par email_verifie optionnelle).
   const isUserVerified = Boolean(
-    user && 
-    user.telephone_verifie === true && 
-    user.phone && 
-    user.phone.trim().length > 0 && 
-    user.id !== 'guest'
+    user &&
+    user.id &&
+    user.id !== 'guest' &&
+    user.role &&
+    user.statut_compte === 'ACTIF'
   );
 
   const updateUserProfile = (data: Partial<User>) => {
@@ -257,6 +258,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.removeItem('iwacutix_user_profile');
       localStorage.removeItem('iwacutix_user_tickets');
     } catch {}
+    // Purge les jetons JWT (accès + refresh) pour terminer la session côté serveur
+    clearStoredTokens();
     setUser(GUEST_USER);
     setTickets([]);
     setCurrentPersona('ACHETEUR');

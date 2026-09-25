@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   X, 
-  Smartphone, 
   KeyRound, 
   ArrowRight, 
   CheckCircle2, 
@@ -10,13 +9,15 @@ import {
   AlertCircle,
   Clock,
   Building2,
-  Ticket,
   Sparkles,
-  Info
+  Info,
+  Mail
 } from 'lucide-react';
-import { api, setStoredTokens } from '../services/apiClient';
+import { api, setStoredTokens, API_BASE_URL } from '../services/apiClient';
 import { useApp } from '../AppContext';
 import { parseApiError } from '../utils/apiErrors';
+import { apiUserToUser } from '../services/apiMappers';
+import type { ApiUser, UserRole } from '../types';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -25,6 +26,8 @@ interface AuthModalProps {
   contextReason?: 'RESERVATION' | 'ORGANISATEUR' | 'GENERAL';
   onSuccess?: () => void;
 }
+
+type AuthMode = 'REGISTER' | 'LOGIN';
 
 export const AuthModal: React.FC<AuthModalProps> = ({ 
   isOpen, 
@@ -38,14 +41,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [tab, setTab] = useState<'ACHETEUR' | 'ORGANISATEUR'>(
     contextReason === 'ORGANISATEUR' ? 'ACHETEUR' : defaultTab
   );
+  const [mode, setMode] = useState<AuthMode>('REGISTER');
 
-  // Acheteur state: Nom & Prénom + Numéro de téléphone
+  // Register state
   const [nomComplet, setNomComplet] = useState(user.name && user.id !== 'guest' ? user.name : '');
+  const [email, setEmail] = useState(user.email && user.email !== 'contact@iwacutix.bi' ? user.email : '');
+  const [username, setUsername] = useState(user.username || '');
   const [phone, setPhone] = useState(user.phone || '');
-  const [otpCode, setOtpCode] = useState('');
-  const [step, setStep] = useState<'PHONE' | 'OTP'>('PHONE');
+  const [newPassword, setNewPassword] = useState('');
 
-  // Organisateur / Admin state (for direct pro login)
+  // Login state
   const [identifiant, setIdentifiant] = useState('');
   const [password, setPassword] = useState('');
 
@@ -53,83 +58,75 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
+  const [deactivated, setDeactivated] = useState(false);
 
   if (!isOpen) return null;
 
-  // 1. Demander le code OTP avec Nom & Prénom + Téléphone
-  const handleRequestOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const hasAnyIdentifier = email.trim().length > 0 || phone.trim().length > 0 || username.trim().length > 0;
+
+  const handleClose = () => {
     setError(null);
-
-    const trimmedName = nomComplet.trim();
-    if (!trimmedName || trimmedName.length < 2) {
-      setError('Veuillez entrer votre nom et prénom complets.');
-      return;
-    }
-
-    const cleanPhone = phone.trim();
-    if (!cleanPhone || cleanPhone.length < 8) {
-      setError('Veuillez entrer un numéro de téléphone valide (+257...).');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      // Demande réelle : le backend envoie le code OTP par SMS au téléphone
-      const res = await api.auth.demanderOtp(cleanPhone);
-      setOtpCode('');
-      setSuccessMsg(
-        res?.message || `Code de v�rification envoy� par SMS au ${cleanPhone}`
-      );
-      setStep('OTP');
-    } catch (err) {
-      setError(parseApiError(err).message);
-    } finally {
-      setLoading(false);
-    }
+    setSuccessMsg(null);
+    onClose();
   };
 
-  // 2. Vérifier le code OTP et créer le compte Acheteur vérifié
-  const handleVerifyOtp = async (e: React.FormEvent) => {
+  const applyUser = (apiUser: ApiUser) => {
+    const mapped = apiUserToUser(apiUser, user, API_BASE_URL);
+    setUser(mapped);
+    updateUserProfile(mapped);
+  };
+
+  const finishSuccess = (role?: UserRole) => {
+    setTimeout(() => {
+      onClose();
+      if (role === 'ORGANISATEUR') {
+        navigate('/organisateur');
+      } else if (role === 'SUPERADMIN') {
+        navigate('/admin/superadmin');
+      } else if (onSuccess) {
+        onSuccess();
+      } else if (contextReason === 'RESERVATION') {
+        navigate('/paiement');
+      } else if (contextReason === 'ORGANISATEUR') {
+        switchPersona('ORGANISATEUR');
+        navigate('/organisateur');
+      }
+    }, 800);
+  };
+
+  // 1. Inscription commune à tous les rôles (email / téléphone / username optionnels, au moins un identifiant)
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMsg(null);
+
+    if (!hasAnyIdentifier) {
+      setError('Veuillez renseigner au moins un identifiant : email, téléphone ou nom d\'utilisateur.');
+      return;
+    }
+    if (!newPassword) {
+      setError('Veuillez choisir un mot de passe.');
+      return;
+    }
+
     setLoading(true);
-
-    const trimmedName = nomComplet.trim() || 'Acheteur IwacuTix';
-    const cleanPhone = phone.trim();
-
     try {
-      const res = await api.auth.verifierOtp(cleanPhone, otpCode.trim());
+      const res = await api.auth.register({
+        email: email.trim() || undefined,
+        username: username.trim() || undefined,
+        telephone: phone.trim() || undefined,
+        password: newPassword,
+        nom_complet: nomComplet.trim() || 'Acheteur IwacuTix',
+      });
       setStoredTokens(res.access, res.refresh);
+      applyUser(res.user);
 
-      // Enregistrer et marquer le profil acheteur comme vérifié avec le nom complet fourni
-      const updatedData = {
-        id: user.id && user.id !== 'guest' ? user.id : 'usr-buyer-' + Date.now(),
-        name: trimmedName,
-        phone: cleanPhone,
-        role: 'ACHETEUR' as const,
-        statut_compte: 'ACTIF' as const,
-        telephone_verifie: true,
-      };
-
-      updateUserProfile(updatedData);
-
-      setSuccessMsg('Compte acheteur vérifié avec succès ! 🎉');
-
-      setTimeout(() => {
-        onClose();
-        if (onSuccess) {
-          onSuccess();
-        } else if (contextReason === 'RESERVATION') {
-          navigate('/paiement');
-        } else if (contextReason === 'ORGANISATEUR') {
-          // Si l'utilisateur voulait devenir organisateur, on active son profil
-          switchPersona('ORGANISATEUR');
-          navigate('/organisateur');
-        }
-      }, 1000);
-
+      setSuccessMsg('Compte créé avec succès ! Vous êtes connecté. 🎉');
+      if (res.user.email && !res.user.email_verifie) {
+        setEmailSent(false);
+      }
+      finishSuccess(res.user.role);
     } catch (err) {
       setError(parseApiError(err).message);
     } finally {
@@ -137,34 +134,63 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // 3. Connexion Professionnelle existante
+  // 2. Envoyer l'email de vérification (bandeau après inscription)
+  const handleVerifyEmail = async () => {
+    if (loading) return;
+    setError(null);
+    setSuccessMsg(null);
+    setLoading(true);
+    try {
+      await api.auth.verifierEmail();
+      setEmailSent(true);
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setError(parsed.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3. Connexion commune à tous les rôles (erreur unique anti-énumération)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMsg(null);
     setLoading(true);
 
     try {
       const res = await api.auth.login(identifiant.trim(), password);
       setStoredTokens(res.access, res.refresh);
+      applyUser(res.user);
 
-      setUser({
-        ...user,
-        id: res.user.id,
-        name: res.user.nom_complet,
-        phone: res.user.telephone,
-        email: res.user.email || 'contact@iwacutix.bi',
-        role: res.user.role,
-        statut_compte: res.user.statut_compte,
-        telephone_verifie: res.user.telephone_verifie,
-      });
+      if (res.user.statut_compte === 'DESACTIVE') {
+        setDeactivated(true);
+        setSuccessMsg('Votre compte est actuellement désactivé.');
+        return;
+      }
 
       setSuccessMsg(`Connexion réussie (${res.user.role}) !`);
-      setTimeout(() => {
-        onClose();
-        if (res.user.role === 'ORGANISATEUR') {
-          navigate('/organisateur');
-        }
-      }, 1000);
+      finishSuccess(res.user.role);
+    } catch (err) {
+      setError(parseApiError(err).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 4. Réactivation du compte désactivé (JWT encore valide)
+  const handleReactivate = async () => {
+    if (loading) return;
+    setError(null);
+    setSuccessMsg(null);
+    setLoading(true);
+    try {
+      await api.auth.reactiver();
+      const me = await api.auth.me();
+      applyUser(me);
+      setDeactivated(false);
+      setSuccessMsg('Compte réactivé avec succès ! Bienvenue. 🎉');
+      finishSuccess(me.role);
     } catch (err) {
       setError(parseApiError(err).message);
     } finally {
@@ -184,13 +210,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
             <div>
               <h3 className="font-display font-bold text-slate-900 dark:text-slate-100 text-sm">
-                {step === 'PHONE' ? 'Création de compte / Connexion' : 'Vérification du numéro'}
+                {mode === 'REGISTER' ? 'Créer un compte' : 'Connexion à votre compte'}
               </h3>
               <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">Billetterie sécurisée IwacuTix</p>
             </div>
           </div>
           <button 
-            onClick={onClose} 
+            onClick={handleClose} 
             className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -200,9 +226,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Contextual notification banners */}
         {contextReason === 'RESERVATION' && (
           <div className="bg-orange-500/10 border-b border-orange-200/60 dark:border-orange-500/20 px-4 py-2.5 flex items-start gap-2.5">
-            <Ticket className="w-4 h-4 text-brand-primary shrink-0 mt-0.5" />
+            <Mail className="w-4 h-4 text-brand-primary shrink-0 mt-0.5" />
             <p className="text-[11px] text-orange-950 dark:text-orange-200 leading-snug">
-              <strong>Réservation en cours :</strong> Créez votre compte en renseignant votre <strong>nom, prénom</strong> et <strong>numéro</strong> pour recevoir vos billets et QR codes.
+              <strong>Réservation en cours :</strong> Créez votre compte en quelques secondes pour finaliser l'achat et recevoir vos billets avec QR codes.
             </p>
           </div>
         )}
@@ -211,7 +237,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="bg-indigo-50 dark:bg-indigo-950/40 border-b border-indigo-100 dark:border-indigo-800/60 px-4 py-2.5 flex items-start gap-2.5">
             <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
             <p className="text-[11px] text-indigo-950 dark:text-indigo-200 leading-snug">
-              <strong>Étape préalable obligatoire :</strong> Vous devez d'abord créer et vérifier votre compte acheteur avec votre numéro de téléphone avant d'activer votre espace organisateur.
+              <strong>Étape préalable :</strong> Créez votre compte pour ensuite activer votre espace organisateur.
             </p>
           </div>
         )}
@@ -226,8 +252,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
-            <Smartphone className="w-3.5 h-3.5 text-brand-primary" />
-            Acheteur (SMS OTP)
+            <Building2 className="w-3.5 h-3.5 text-brand-primary" />
+            Acheteur
           </button>
           <button
             onClick={() => { setTab('ORGANISATEUR'); setError(null); }}
@@ -238,7 +264,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             }`}
           >
             <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-            Compte Pro Existant
+            Pro (Organisateur)
           </button>
         </div>
 
@@ -259,131 +285,171 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
-          {/* TAB 1 : ACHETEUR (Nom & Prénom + Téléphone + OTP SMS) */}
-          {tab === 'ACHETEUR' && (
-            <div>
-              {step === 'PHONE' ? (
-                <form onSubmit={handleRequestOtp} className="space-y-3.5">
-                  {/* Nom et prénom */}
-                  <div className="space-y-1 text-left">
-                    <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
-                      <span>Nom et prénom complets</span>
-                      <span className="text-[10px] text-brand-primary font-semibold">Obligatoire</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={nomComplet}
-                      onChange={(e) => setNomComplet(e.target.value)}
-                      placeholder="Ex. Dahl Ndayisenga"
-                      required
-                      autoFocus
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-primary placeholder:text-slate-400"
-                    />
-                    <p className="text-[10px] text-slate-400">
-                      Ce nom sera imprimé sur vos billets électroniques nominatifs.
-                    </p>
-                  </div>
+          {/* Compte désactivé → réactivation */}
+          {deactivated ? (
+            <form onSubmit={(e) => { e.preventDefault(); handleReactivate(); }} className="space-y-3.5">
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
+                <strong>Votre compte est désactivé.</strong> Vous ne pouvez plus passer de commande ni organiser d'événements tant qu'il est désactivé. Vous pouvez le réactiver immédiatement.
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50 cursor-pointer active:scale-95"
+              >
+                {loading ? 'Réactivation en cours...' : 'Réactiver mon compte'}
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <p className="text-[10px] text-slate-400 text-center">
+                Au-delà de la réactivation, votre compte reprend son état normal (ACTIF).
+              </p>
+            </form>
+          ) : mode === 'REGISTER' ? (
+            <form onSubmit={handleRegister} className="space-y-3">
+              {/* Nom complet */}
+              <div className="space-y-1 text-left">
+                <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                  <span>Nom et prénom complets</span>
+                  <span className="text-[10px] text-brand-primary font-semibold">Obligatoire</span>
+                </label>
+                <input
+                  type="text"
+                  value={nomComplet}
+                  onChange={(e) => setNomComplet(e.target.value)}
+                  placeholder="Ex. Dahl Ndayisenga"
+                  required
+                  autoFocus
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-primary placeholder:text-slate-400"
+                />
+                <p className="text-[10px] text-slate-400">
+                  Ce nom sera imprimé sur vos billets électroniques nominatifs.
+                </p>
+              </div>
 
-                  {/* Numéro de téléphone */}
-                  <div className="space-y-1 text-left">
-                    <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
-                      <span>Numéro de téléphone (+257)</span>
-                      <span className="text-[10px] text-brand-primary font-semibold">Vérification SMS</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="+257 69 123 456"
-                        required
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                      />
-                    </div>
-                    <p className="text-[10px] text-slate-400">
-                      Lumitel (6x) ou Econet (7x). Vous recevrez un code OTP instantané.
-                    </p>
-                  </div>
+              {/* Email */}
+              <div className="space-y-1 text-left">
+                <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                  <span>Adresse email</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Conseillé</span>
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="vous@exemple.com"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-primary placeholder:text-slate-400"
+                />
+              </div>
 
-                  <button
-                    type="submit"
-                    disabled={loading || !nomComplet.trim() || !phone.trim()}
-                    className="w-full py-3 bg-brand-primary hover:bg-orange-600 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-primary/20 disabled:opacity-50 cursor-pointer active:scale-95"
-                  >
-                    {loading ? 'Envoi en cours...' : 'Continuer et recevoir le code SMS'}
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleVerifyOtp} className="space-y-3.5">
-                  <div className="space-y-1 text-left">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-bold text-slate-700">Code SMS de validation (6 chiffres)</label>
-                      <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-orange-500" />
-                        10 min
-                      </span>
-                    </div>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value)}
-                      placeholder="123456"
-                      autoFocus
-                      required
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-lg font-mono tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                    />
-                  </div>
+              {/* Téléphone */}
+              <div className="space-y-1 text-left">
+                <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                  <span>Numéro de téléphone (+257)</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Optionnel</span>
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+257 69 123 456"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                />
+              </div>
 
-                  {/* Notification d'information */}
-                  <div className="p-2.5 bg-slate-50 border border-slate-200/70 rounded-xl flex items-center gap-1.5 text-[11px]">
-                    <Info className="w-3.5 h-3.5 text-brand-primary" />
-                    <span className="text-slate-600">
-                      Saisissez le code à 6 chiffres que vous avez reçu par SMS.
-                    </span>
-                  </div>
+              {/* Username */}
+              <div className="space-y-1 text-left">
+                <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                  <span>Nom d'utilisateur</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Optionnel</span>
+                </label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="pseudo"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-primary placeholder:text-slate-400"
+                />
+                <p className="text-[10px] text-slate-400">
+                  Renseignez au moins un identifiant (email, téléphone ou pseudo).
+                </p>
+              </div>
 
-                  <p className="text-[10px] text-slate-400 text-center">
-                    Compte : <strong>{nomComplet}</strong> ({phone})
-                  </p>
+              {/* Mot de passe */}
+              <div className="space-y-1 text-left">
+                <label className="text-[11px] font-bold text-slate-700">Mot de passe</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                />
+                <p className="text-[10px] text-slate-400">
+                  La robustesse est vérifiée lors de l'inscription.
+                </p>
+              </div>
 
-                  <button
-                    type="submit"
-                    disabled={loading || otpCode.length < 4}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50 cursor-pointer active:scale-95"
-                  >
-                    {loading ? 'Validation en cours...' : 'Vérifier mon numéro & Activer mon compte'}
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                  </button>
+              <button
+                type="submit"
+                disabled={loading || !hasAnyIdentifier || !newPassword.trim()}
+                className="w-full py-3 bg-brand-primary hover:bg-orange-600 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-primary/20 disabled:opacity-50 cursor-pointer active:scale-95"
+              >
+                {loading ? 'Création en cours...' : 'Créer mon compte'}
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              </button>
 
+              {/* Bandeau vérification email après inscription avec email */}
+              {successMsg && email.trim().length > 0 && !emailSent && (
+                <div className="p-2.5 bg-sky-50 border border-sky-200 rounded-xl flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-sky-900 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                    Vérifiez votre email
+                  </span>
                   <button
                     type="button"
-                    onClick={() => { setStep('PHONE'); setError(null); }}
-                    className="w-full text-center text-[10px] text-slate-500 hover:underline pt-1 cursor-pointer"
+                    onClick={handleVerifyEmail}
+                    disabled={loading}
+                    className="text-[10px] font-bold text-sky-700 underline disabled:opacity-50 cursor-pointer"
                   >
-                    Modifier le nom ou le numéro de téléphone
+                    {emailSent ? 'Email envoyé ✓' : 'Envoyer le lien'}
                   </button>
-                </form>
+                </div>
               )}
-            </div>
-          )}
 
-          {/* TAB 2 : ORGANISATEUR PRO (Connexion avec mot de passe) */}
-          {tab === 'ORGANISATEUR' && (
+              {/* Lien vers connexion */}
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setMode('LOGIN'); setError(null); }}
+                  className="text-[11px] font-bold text-brand-primary hover:underline cursor-pointer"
+                >
+                  Déjà un compte ? Se connecter
+                </button>
+                <span className="mx-1.5 text-slate-300">•</span>
+                <button
+                  type="button"
+                  onClick={() => { handleClose(); navigate('/mot-de-passe-oublie'); }}
+                  className="text-[11px] font-bold text-slate-500 hover:underline cursor-pointer"
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
+            </form>
+          ) : (
             <form onSubmit={handleLogin} className="space-y-3.5">
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600">
-                Vous avez déjà un compte organisateur enregistré ? Connectez-vous avec vos identifiants professionnels.
+                Connexion sécurisée commune à tous les rôles (Acheteur, Organisateur, Administration).
               </div>
 
               <div className="space-y-1 text-left">
-                <label className="text-[11px] font-bold text-slate-700">Identifiant (Email ou Téléphone)</label>
+                <label className="text-[11px] font-bold text-slate-700">Identifiant (Email, Téléphone ou Username)</label>
                 <input
                   type="text"
                   value={identifiant}
                   onChange={(e) => setIdentifiant(e.target.value)}
-                  placeholder="contact@iwacutix.bi ou +257..."
+                  placeholder="vous@exemple.com ou +257..."
                   required
+                  autoFocus
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600"
                 />
               </div>
@@ -405,9 +471,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 disabled={loading}
                 className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 disabled:opacity-50 cursor-pointer"
               >
-                {loading ? 'Connexion en cours...' : 'Connexion Espace Professionnel'}
+                {loading ? 'Connexion en cours...' : 'Se connecter'}
                 <KeyRound className="w-3.5 h-3.5" />
               </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setMode('REGISTER'); setError(null); }}
+                  className="text-[11px] font-bold text-brand-primary hover:underline cursor-pointer"
+                >
+                  Pas encore de compte ? Créer un compte
+                </button>
+                <span className="mx-1.5 text-slate-300">•</span>
+                <button
+                  type="button"
+                  onClick={() => { handleClose(); navigate('/mot-de-passe-oublie'); }}
+                  className="text-[11px] font-bold text-slate-500 hover:underline cursor-pointer"
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
             </form>
           )}
 
@@ -416,7 +500,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Footer info */}
         <div className="p-3 bg-slate-50 border-t border-slate-100 text-center">
           <p className="text-[9px] text-slate-400 font-mono">
-            Vérification OTP conforme aux télécoms du Burundi (Lumitel & Econet Leo)
+            Connexion & inscription sécurisées — Aucun SMS requis. Validation email & mot de passe.
           </p>
         </div>
 
