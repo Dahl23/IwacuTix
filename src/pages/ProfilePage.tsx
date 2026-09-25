@@ -388,7 +388,7 @@ export const ProfilePage: React.FC = () => {
           {!isUserVerified && (
             <div className="pt-2">
               <p className="text-[10px] font-mono font-bold text-amber-800 uppercase tracking-wider bg-amber-50 px-2.5 py-1 rounded-full inline-flex items-center gap-1 border border-amber-200">
-                COMPTE INVITÉ • NON VÉRIFIÉ
+                
               </p>
               <button
                 onClick={() => openAuthModal('GENERAL')}

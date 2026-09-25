@@ -159,7 +159,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                     {isUserVerified ? user.name : 'Connexion'}
                   </p>
                   <p className="text-[9px] font-mono font-semibold uppercase leading-none text-orange-600 dark:text-orange-400">
-                    {isUserVerified ? (isOrganizer ? 'Organisateur' : 'Acheteur') : 'Compte Invité'}
+                    {isUserVerified ? (isOrganizer ? 'Organisateur' : 'Acheteur') : ''}
                   </p>
                 </div>
 
@@ -177,7 +177,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                        {isUserVerified ? user.name : 'Visiteur / Compte Invité'}
+                        {isUserVerified ? user.name :'' }
                       </p>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate">
                         {isUserVerified ? (user.phone || user.email) : 'Non connecté'}
@@ -190,7 +190,7 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
                             ? 'bg-indigo-100 text-indigo-700' 
                             : 'bg-emerald-100 text-emerald-800'
                         }`}>
-                          {!isUserVerified ? 'Compte Invité' : isOrganizer ? 'Compte Organisateur' : 'Acheteur Vérifié ✓'}
+                          {!isUserVerified ? '' : isOrganizer ? 'Compte Organisateur' : 'Acheteur Vérifié ✓'}
                         </span>
                       </div>
                     </div>
