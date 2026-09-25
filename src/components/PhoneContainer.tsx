@@ -8,7 +8,6 @@ import {
   Clock, Megaphone, CheckCheck, Download,
   ChevronDown, ArrowRight, LogIn
 } from 'lucide-react';
-import { Logo } from './Logo';
 import { IwacuTixLogo } from './IwacuTixLogo';
 import { PWAInstallButton } from './PWAInstallButton';
 import { OfflineIndicator } from './OfflineIndicator';
@@ -101,9 +100,8 @@ export const PhoneContainer: React.FC<PhoneContainerProps> = ({ children }) => {
         <div className="w-full max-w-[1560px] mx-auto px-3 sm:px-6 md:px-8 lg:px-12 h-15 sm:h-18 flex items-center justify-between">
           
           {/* Left: Branding & Logo */}
-          <Link to="/home" className="flex items-center gap-2 sm:gap-3 active:scale-95 transition-all shrink-0">
-            <IwacuTixLogo size="sm" className="sm:hidden" showTagline={false} />
-            <IwacuTixLogo size="md" className="hidden sm:flex" showTagline={true} />
+          <Link to="/home" className="flex items-center active:scale-95 transition-all shrink-0">
+            <IwacuTixLogo size="sm" showTagline={true} />
           </Link>
 
           {/* Center: Clean Desktop Navigation Links */}

@@ -10,7 +10,6 @@ import {
   CheckCircle2, 
   AlertCircle, 
   ArrowRight, 
-  FileText, 
   Building2, 
   User as UserIcon, 
   ChevronLeft,
@@ -27,11 +26,8 @@ export const OrganizerKycPage: React.FC = () => {
   // Form states
   const [nomLegal, setNomLegal] = useState(user.name || '');
   const [structureName, setStructureName] = useState(user.organisateurProfile?.nom_structure || '');
-  const [numeroCni, setNumeroCni] = useState('');
-  const [cniRectoUrl, setCniRectoUrl] = useState<string>('');
-  const [cniVersoUrl, setCniVersoUrl] = useState<string>('');
-  const [cniRectoFile, setCniRectoFile] = useState<File | null>(null);
-  const [cniVersoFile, setCniVersoFile] = useState<File | null>(null);
+  const [identityPhotoUrl, setIdentityPhotoUrl] = useState<string>('');
+  const [identityPhotoFile, setIdentityPhotoFile] = useState<File | null>(null);
 
   
   // Email & OTP states
@@ -44,21 +40,12 @@ export const OrganizerKycPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
 
-  const handleCniRectoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleIdentityPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setCniRectoFile(file);
+    setIdentityPhotoFile(file);
     const reader = new FileReader();
-    reader.onload = () => setCniRectoUrl(reader.result as string);
-    reader.readAsDataURL(file);
-  };
-
-  const handleCniVersoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setCniVersoFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setCniVersoUrl(reader.result as string);
+    reader.onload = () => setIdentityPhotoUrl(reader.result as string);
     reader.readAsDataURL(file);
   };
 
@@ -69,12 +56,8 @@ export const OrganizerKycPage: React.FC = () => {
       setErrorMsg('Veuillez renseigner votre nom complet légal.');
       return;
     }
-    if (!numeroCni.trim()) {
-      setErrorMsg('Veuillez renseigner le numéro officiel de votre CNI.');
-      return;
-    }
-    if (!cniRectoUrl || !cniVersoUrl) {
-      setErrorMsg('Veuillez téléverser la face RECTO et VERSO de votre CNI.');
+    if (!identityPhotoUrl) {
+      setErrorMsg('Veuillez téléverser une photo de votre pièce d\'identité.');
       return;
     }
     setStep(2);
@@ -140,21 +123,21 @@ export const OrganizerKycPage: React.FC = () => {
     setErrorMsg('');
 
     try {
-      const file = cniRectoFile;
+      const file = identityPhotoFile;
       if (!file) {
-        setErrorMsg('Veuillez sélectionner la photo recto de votre CNI avant de soumettre.');
+        setErrorMsg('Veuillez sélectionner une photo de votre pièce d\'identité avant de soumettre.');
         setIsSubmitting(false);
         return;
       }
       const demande = await api.organisateurs.soumettreDemande({
         nom_entreprise: structureName.trim() || nomLegal.trim(),
         nom_structure: structureName.trim() || undefined,
-        justification: `Demande d'adhésion organisateur IwacuTix - ${nomLegal.trim()} - CNI ${numeroCni.trim()}`,
+        justification: `Demande d'adhésion organisateur IwacuTix - ${nomLegal.trim()}`,
         document_verification: file,
       });
 
       if (demande && (demande.statut === 'REJETE_AUTO' || demande.statut === 'REJETE')) {
-        setErrorMsg(demande.motif_rejet || 'Votre demande a été rejetée. Vérifiez vos documents (CNI illisible) et soumettez une nouvelle demande.');
+        setErrorMsg(demande.motif_rejet || 'Votre demande a été rejetée. Vérifiez vos documents (illisible) et soumettez une nouvelle demande.');
         setStep(1);
         return;
       }
@@ -202,7 +185,7 @@ export const OrganizerKycPage: React.FC = () => {
               }`}>
                 {step > 1 ? <CheckCircle2 className="w-4 h-4" /> : '1'}
               </div>
-              <span className="text-[10px] font-bold">CNI (2 faces)</span>
+              <span className="text-[10px] font-bold">Identité</span>
             </div>
 
             {/* Step 2 */}
@@ -234,15 +217,15 @@ export const OrganizerKycPage: React.FC = () => {
           </div>
         )}
 
-        {/* STEP 1: CNI RECTO / VERSO */}
+        {/* STEP 1: IDENTITÉ */}
         {step === 1 && (
           <form onSubmit={handleStep1Next} className="space-y-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
             <div className="space-y-1">
               <h2 className="text-base font-display font-extrabold text-slate-900">
-                1. Pièce d'Identité Officielle (CNI)
+                1. Informations du responsable légal
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Conformément aux normes de billetterie au Burundi, l'organisateur doit justifier de son identité par sa Carte Nationale d'Identité en recto et verso.
+                Pour publier des événements sur IwacuTix, votre demande d'adhésion est revue par l'équipe. Une photo de votre pièce d'identité officielle est requise pour la vérification.
               </p>
             </div>
 
@@ -281,80 +264,32 @@ export const OrganizerKycPage: React.FC = () => {
                 <span className="text-[10px] text-slate-400">Si vous êtes indépendant, laissez vide (votre nom légal sera utilisé).</span>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Numéro de Carte Nationale d'Identité (CNI) <span className="text-red-500">*</span>
+              {/* Photo de la pièce d'identité */}
+              <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 space-y-2 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">Photo de la pièce d'identité</span>
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">Obligatoire</span>
+                </div>
+                {identityPhotoUrl ? (
+                  <div className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-900">
+                    <img src={identityPhotoUrl} alt="Pièce d'identité" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                      <span className="text-white text-[10px] font-bold bg-black/60 px-2 py-1 rounded">Photo validée</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 flex flex-col items-center justify-center text-slate-400 gap-1 aspect-video">
+                    <UploadCloud className="w-6 h-6" />
+                    <span className="text-[10px]">Photo de votre pièce d'identité</span>
+                  </div>
+                )}
+                <label
+                  className="w-full py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-1"
+                >
+                  <UploadCloud className="w-3 h-3 text-slate-500" />
+                  Sélectionner la photo
+                  <input type="file" accept="image/*" onChange={handleIdentityPhotoUpload} className="sr-only" />
                 </label>
-                <div className="relative">
-                  <FileText className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={numeroCni}
-                    onChange={(e) => setNumeroCni(e.target.value)}
-                    placeholder="Ex: CNI-257-89104-BJM"
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Photos CNI Recto / Verso */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                {/* Recto */}
-                <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800">CNI Face RECTO</span>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold">Face avant</span>
-                  </div>
-                  {cniRectoUrl ? (
-                    <div className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-900">
-                      <img src={cniRectoUrl} alt="CNI Recto" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                        <span className="text-white text-[10px] font-bold bg-black/60 px-2 py-1 rounded">Recto validé</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 flex flex-col items-center justify-center text-slate-400 gap-1 aspect-video">
-                      <UploadCloud className="w-6 h-6" />
-                      <span className="text-[10px]">Photo du Recto</span>
-                    </div>
-                  )}
-                  <label
-                    className="w-full py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-1"
-                  >
-                    <UploadCloud className="w-3 h-3 text-slate-500" />
-                    Sélectionner la photo Recto
-                    <input type="file" accept="image/*" onChange={handleCniRectoUpload} className="sr-only" />
-                  </label>
-                </div>
-
-                {/* Verso */}
-                <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800">CNI Face VERSO</span>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 font-semibold">Face arrière</span>
-                  </div>
-                  {cniVersoUrl ? (
-                    <div className="relative rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-900">
-                      <img src={cniVersoUrl} alt="CNI Verso" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                        <span className="text-white text-[10px] font-bold bg-black/60 px-2 py-1 rounded">Verso validé</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 flex flex-col items-center justify-center text-slate-400 gap-1 aspect-video">
-                      <UploadCloud className="w-6 h-6" />
-                      <span className="text-[10px]">Photo du Verso</span>
-                    </div>
-                  )}
-                  <label
-                    className="w-full py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-1"
-                  >
-                    <UploadCloud className="w-3 h-3 text-slate-500" />
-                    Sélectionner la photo Verso
-                    <input type="file" accept="image/*" onChange={handleCniVersoUpload} className="sr-only" />
-                  </label>
-                </div>
               </div>
             </div>
 
@@ -449,7 +384,7 @@ export const OrganizerKycPage: React.FC = () => {
                 onClick={() => setStep(1)}
                 className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800"
               >
-                ← Modifier la CNI
+                ← Modifier l'identité
               </button>
             </div>
           </div>
@@ -467,7 +402,7 @@ export const OrganizerKycPage: React.FC = () => {
                 Vérification de votre email réussie !
               </h2>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Votre email organisateur est vérifié. Vous pouvez maintenant soumettre votre demande d'adhésion afin que l'équipe IwacuTix valide vos documents (CNI).
+                Votre email organisateur est vérifié. Vous pouvez maintenant soumettre votre demande d'adhésion afin que l'équipe IwacuTix valide vos documents.
               </p>
             </div>
 
@@ -479,10 +414,6 @@ export const OrganizerKycPage: React.FC = () => {
               <div className="flex justify-between text-xs">
                 <span className="text-slate-500">Structure / Nom légal</span>
                 <span className="font-bold text-slate-900">{structureName.trim() || nomLegal.trim()}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">CNI</span>
-                <span className="font-bold text-slate-900 font-mono">{numeroCni.trim()}</span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-slate-500">Email vérifié</span>

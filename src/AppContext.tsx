@@ -12,6 +12,7 @@ import {
 } from './types';
 import { api, API_BASE_URL, getStoredAccessToken, clearStoredTokens } from './services/apiClient';
 import { apiEventToEvent, apiTicketToPurchased, apiUserToUser } from './services/apiMappers';
+import { useUserEventsWebSocket } from './hooks/useWebSocket';
 import { 
   DEFAULT_ANONYMOUS_AVATAR,
   GUEST_USER
@@ -432,7 +433,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setFollowedEventIds((prev) => prev.filter((id) => id !== eventId));
   };
 
-  const addNotification = (
+  const addNotification = useCallback((
     title: string,
     body: string,
     type: 'approaching' | 'update' | 'system',
@@ -450,7 +451,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       read: false,
     };
     setNotifications((prev) => [newNotif, ...prev]);
-  };
+  }, []);
+
+  // Canal temps réel WebSocket : /ws/evenements/ (Guide développeur WEBSOCKET.md §3)
+  // Reçoit les événements de commandes (création, statut) et règlements sans polling
+  useUserEventsWebSocket({
+    enabled: isUserVerified,
+    onCommandeStatut: (evt) => {
+      const { order_id, statut, quantite, montant_fbu, raison } = evt.donnees;
+      if (statut === 'SUCCESS') {
+        refreshTicketsFromApi();
+        addNotification(
+          'Paiement confirmé 🎉',
+          `Votre commande #${order_id.slice(0, 8)} (${quantite} billet(s), ${montant_fbu} FBu) a été validée. Vos billets sont disponibles.`,
+          'update'
+        );
+      } else if (statut === 'EXPIRE') {
+        addNotification(
+          'Réservation expirée ⏱️',
+          `La réservation pour la commande #${order_id.slice(0, 8)} a expiré (10 minutes).`,
+          'system'
+        );
+      } else if (statut === 'ECHEC') {
+        addNotification(
+          'Paiement non abouti ⚠️',
+          `La commande #${order_id.slice(0, 8)} a échoué${raison ? ` : ${raison}` : ''}.`,
+          'system'
+        );
+      }
+    },
+    onReglement: (evt) => {
+      const { role, statut, montant_sats } = evt.donnees;
+      if (statut === 'REUSSI') {
+        addNotification(
+          'Règlement validé ⚡',
+          `Règlement ${role.toLowerCase()} de ${montant_sats.toLocaleString()} sats confirmé.`,
+          'system'
+        );
+      }
+    },
+  });
 
   const markAllNotificationsAsRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));

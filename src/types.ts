@@ -12,10 +12,6 @@ export interface OrganisateurProfile {
 }
 
 export interface OrganisateurKyc {
-  cniNom: string;
-  cniNumero: string;
-  cniRectoUrl: string;
-  cniVersoUrl: string;
   email: string;
   emailVerifie: boolean;
   statut: 'VERIFIE' | 'EN_ATTENTE' | 'NON_SOUMIS';
@@ -412,5 +408,99 @@ export interface TransactionAuditLog {
   date_creation: string;
   details?: Record<string, any>;
 }
+
+// ---------------------------------------------------------------------------
+// TYPES WEBSOCKET IWACUTIX (TEMPS RÉEL — WEBSOCKET.MD)
+// ---------------------------------------------------------------------------
+
+export interface WsReadyEvent {
+  type: 'ready';
+  user_id: string;
+  groupes: string[];
+}
+
+export interface WsCommandeCreePayload {
+  order_id: string;
+  statut: 'PENDING' | string;
+  event_id: string;
+  tier_id: string;
+  quantite: number;
+  montant_fbu: string;
+  montant_sats: number;
+  moyen_paiement: string;
+  date_creation: string;
+  statut_initial: string;
+}
+
+export interface WsCommandeCreeEvent {
+  type: 'commande.cree';
+  donnees: WsCommandeCreePayload;
+}
+
+export interface WsCommandeStatutPayload {
+  order_id: string;
+  statut: 'PENDING' | 'SUCCESS' | 'ECHEC' | 'EXPIRE' | string;
+  event_id: string;
+  tier_id: string;
+  quantite: number;
+  montant_fbu: string;
+  montant_sats: number;
+  moyen_paiement: string;
+  date_creation: string;
+  statut_avant: string;
+  raison?: string | null;
+}
+
+export interface WsCommandeStatutEvent {
+  type: 'commande.statut';
+  donnees: WsCommandeStatutPayload;
+}
+
+export interface WsReglementPayload {
+  order_id: string;
+  role: 'COMMISSION' | 'ORGANISATEUR' | string;
+  statut: 'EN_ATTENTE' | 'REUSSI' | 'ECHEC_RETRY' | 'ECHEC_DEFINITIF' | string;
+  montant_sats: number;
+  tentatives: number;
+  erreur?: string | null;
+  note?: string | null;
+}
+
+export interface WsReglementEvent {
+  type: 'reglement.commission' | 'reglement.organisateur';
+  donnees: WsReglementPayload;
+}
+
+export interface WsBilletScanPayload {
+  ticket_id: string;
+  order_id: string;
+  event_id: string;
+  statut: 'UTILISE' | 'VALIDE' | 'ANNULE' | string;
+  statut_validation: 'ACCEPTE' | 'REJETE';
+  scanneur_id: string;
+  scanned_at?: string | null;
+  raison_rejet?: 'deja_scanne' | 'annule' | string | null;
+}
+
+export interface WsBilletScanEvent {
+  type: 'billet.scan';
+  donnees: WsBilletScanPayload;
+}
+
+export type WsServerEvent =
+  | WsReadyEvent
+  | WsCommandeCreeEvent
+  | WsCommandeStatutEvent
+  | WsReglementEvent
+  | WsBilletScanEvent;
+
+export type WsEventType =
+  | 'ready'
+  | 'commande.cree'
+  | 'commande.statut'
+  | 'reglement.commission'
+  | 'reglement.organisateur'
+  | 'billet.scan';
+
 
 

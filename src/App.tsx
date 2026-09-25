@@ -70,7 +70,7 @@ function AppRoutes() {
           {/* 5. Query match & city filtration */}
           <Route path="/recherche" element={<SearchPage />} />
 
-          {/* 6. Organizer CNI & Email KYC verification */}
+          {/* 6. Organizer KYC verification */}
           <Route path="/organisateur/verification" element={<OrganizerKycPage />} />
 
           {/* 7. Organizer Hub (exclusive management of events attached to the organizer) */}

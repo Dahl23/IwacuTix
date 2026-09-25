@@ -223,7 +223,7 @@ export const OrganizerHubPage: React.FC = () => {
     );
   }
 
-  // If not verified organizer, prompt to verify CNI
+  // If not verified organizer, prompt to verify identity
   if (user.role !== 'ORGANISATEUR' && user.role !== 'SUPERADMIN' && monProfilStatus !== 'VERIFIE') {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-[#F8FAFC]">
@@ -232,13 +232,13 @@ export const OrganizerHubPage: React.FC = () => {
         </div>
         <h2 className="text-lg font-display font-extrabold text-slate-900">Espace Organisateur Verrouillé</h2>
         <p className="text-xs text-slate-600 max-w-sm mt-2 leading-relaxed">
-          Pour créer des événements, gérer vos statistiques de vente et nommer vos scanneurs de billets, vous devez vérifier votre identité légale (CNI recto/verso et Email).
+          Pour créer des événements, gérer vos statistiques de vente et nommer vos scanneurs de billets, vous devez vérifier votre identité légale (Email et pièce d'identité).
         </p>
         <button
           onClick={() => navigate('/organisateur/verification')}
           className="mt-6 px-6 py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-orange-500/25 cursor-pointer active:scale-95 transition-all"
         >
-          Vérifier mon Identité (CNI + Email)
+          Vérifier mon Identité (Email + Pièce d'identité)
         </button>
       </div>
     );
@@ -255,7 +255,7 @@ export const OrganizerHubPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
-                Compte Organisateur Certifié CNI
+                Compte Organisateur Certifié
               </span>
               {user.role === 'SUPERADMIN' && (
                 <span className="px-2 py-0.5 rounded bg-purple-500/30 text-purple-300 text-[10px] font-mono font-bold">

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useApp, OrderDraft } from '../AppContext';
 import { api } from '../services/apiClient';
 import { apiTicketToPurchased } from '../services/apiMappers';
+import { useUserEventsWebSocket } from '../hooks/useWebSocket';
 import { parseApiError } from '../utils/apiErrors';
 import QRCode from 'qrcode';
 import {
@@ -232,7 +233,27 @@ export const ConfirmationPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- POLLING Lightning : vérifier l'état des commandes toutes les 3s (doc §6) ----
+  // ---- WEBSOCKET TEMPS RÉEL : écoute instantanée du statut (WEBSOCKET.md §5.2) ----
+  useUserEventsWebSocket({
+    enabled: phase === 'WAIT',
+    onCommandeStatut: (evt) => {
+      const { order_id, statut, raison } = evt.donnees;
+      setInvoices((prev) =>
+        prev.map((x) =>
+          x && x.orderId === order_id ? { ...x, statut: statut as CreatedInvoice['statut'] } : x
+        )
+      );
+      if (statut === 'ECHEC') {
+        setMessage(`Le paiement a échoué sur le backend${raison ? ` : ${raison}` : ''}.`);
+        setPhase('ERROR');
+      } else if (statut === 'EXPIRE') {
+        setMessage('Réservation de stock expirée (10 min). Veuillez relancer la commande.');
+        setPhase('EXPIRED');
+      }
+    },
+  });
+
+  // ---- POLLING Lightning de repli : vérifier l'état des commandes toutes les 3s (doc §6) ----
   // S'arrête définitivement dès que plus aucune facture n'est PENDING (SUCCESS/ECHEC/EXPIRE).
   const pollingInvoicesRef = useRef<CreatedInvoice[]>([]);
   pollingInvoicesRef.current = invoices;

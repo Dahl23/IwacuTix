@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { api } from '../services/apiClient';
+import { useEventScansWebSocket } from '../hooks/useWebSocket';
 import { parseApiError } from '../utils/apiErrors';
 import { ScanneurAssignment } from '../types';
 import jsQR from 'jsqr';
@@ -106,6 +107,27 @@ export const ScannerPage: React.FC = () => {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [selectedEventId]);
+
+  // Canal temps réel WebSocket : /ws/evenement/{event_id}/ (WEBSOCKET.md §3 & §5.4)
+  // Reçoit les scans de billets de cet événement en temps réel pour synchroniser les guichets
+  useEventScansWebSocket(selectedEventId, {
+    enabled: Boolean(selectedEventId),
+    onBilletScan: (evt) => {
+      const { ticket_id, statut_validation, raison_rejet, scanneur_id } = evt.donnees;
+      setApiScanLogs((prev) => [
+        {
+          id: `ws-${ticket_id}-${Date.now()}`,
+          ticket_id,
+          statut_validation,
+          tier_name: 'Billet scanné',
+          raison_rejet: raison_rejet || undefined,
+          scanned_at: new Date().toLocaleString('fr-FR'),
+          scanned_by_nom: scanneur_id === user.id ? (user.name || 'Moi') : 'Scanneur',
+        },
+        ...prev,
+      ]);
+    },
+  });
 
   const scanningRef = useRef(false);
 

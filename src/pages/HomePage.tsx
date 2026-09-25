@@ -124,7 +124,7 @@ export const HomePage: React.FC = () => {
               Vous organisez un concert, match ou événement ?
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Vérifiez votre identité (CNI Recto/Verso + Email) pour publier vos billets, accéder au tableau de bord des statistiques en direct et nommer vos scanneurs de billets à l'entrée.
+              Vérifiez votre identité (Email + pièce d'identité) pour publier vos billets, accéder au tableau de bord des statistiques en direct et nommer vos scanneurs de billets à l'entrée.
             </p>
           </div>
 
@@ -157,7 +157,7 @@ export const HomePage: React.FC = () => {
                 className="px-5 py-3 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/25 flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
               >
                 <ShieldCheck className="w-4 h-4" />
-                <span>Créer un événement (Vérifier CNI)</span>
+                <span>Créer un événement (Vérifier identité)</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             )}
