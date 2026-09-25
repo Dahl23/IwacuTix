@@ -309,19 +309,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="space-y-1 text-left">
                 <label className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
                   <span>Nom et prénom complets</span>
-                  <span className="text-[10px] text-brand-primary font-semibold">Obligatoire</span>
+                  <span className="text-[10px] text-slate-400 font-medium">Optionnel</span>
                 </label>
                 <input
                   type="text"
                   value={nomComplet}
                   onChange={(e) => setNomComplet(e.target.value)}
                   placeholder="Ex. Dahl Ndayisenga"
-                  required
-                  autoFocus
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-primary placeholder:text-slate-400"
                 />
                 <p className="text-[10px] text-slate-400">
-                  Ce nom sera imprimé sur vos billets électroniques nominatifs.
+                  Sera imprimé sur vos billets nominatifs si renseigné.
                 </p>
               </div>
 
@@ -391,7 +389,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <button
                 type="submit"
-                disabled={loading || !nomComplet.trim() || !newPassword.trim()}
+                disabled={loading || !newPassword.trim()}
                 className="w-full py-3 bg-brand-primary hover:bg-orange-600 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-primary/20 disabled:opacity-50 cursor-pointer active:scale-95"
               >
                 {loading ? 'Création en cours...' : 'Créer mon compte'}

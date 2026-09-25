@@ -122,6 +122,7 @@ async function request<T>(
 
             if (refreshRes.ok) {
               const data = await refreshRes.json();
+              // Rotation + blacklist : on écrase TOUJOURS l'ancien refresh par le nouveau reçu
               setStoredTokens(data.access, data.refresh);
               onTokenRefreshed(data.access);
               isRefreshing = false;
@@ -130,10 +131,13 @@ async function request<T>(
             } else {
               clearStoredTokens();
               isRefreshing = false;
+              // Refresh expiré / révoqué / blacklisté → déconnexion forcée
+              window.dispatchEvent(new Event('iwacutix:session-expired'));
             }
           } catch {
             isRefreshing = false;
             clearStoredTokens();
+            window.dispatchEvent(new Event('iwacutix:session-expired'));
           }
         } else {
           // Attendre la résolution du single-flight en cours

@@ -332,6 +332,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .catch(() => {});
   }, [loadPublicEvents]);
 
+  // Échec de refresh JWT (expiré/révoqué) → déconnexion forcée, retour invité
+  useEffect(() => {
+    const onSessionExpired = () => logoutUser();
+    window.addEventListener('iwacutix:session-expired', onSessionExpired);
+    return () => window.removeEventListener('iwacutix:session-expired', onSessionExpired);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const activatePersonaFromRole = (role: string) => {
     if (role === 'ORGANISATEUR') setCurrentPersona('ORGANISATEUR');
     else if (role === 'SUPERADMIN') setCurrentPersona('SUPERADMIN');
