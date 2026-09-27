@@ -31,13 +31,19 @@ import {
   X,
   Image as ImageIcon,
   Sun,
-  MailCheck
+  MailCheck,
+  Send,
+  CheckCircle2,
+  AlertTriangle,
+  ArchiveRestore,
+  Loader2,
+  UserX
 } from 'lucide-react';
 import { AuthModal } from '../components/AuthModal';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { api, getStoredAccessToken, API_BASE_URL } from '../services/apiClient';
-import { ScanneurAssignment } from '../types';
+import { ScanneurAssignment, OrganisateurProfilApi } from '../types';
 import { toAbsoluteApiUrl } from '../services/apiMappers';
 import { parseApiError } from '../utils/apiErrors';
 import { DEFAULT_ANONYMOUS_AVATAR } from '../data';
@@ -68,6 +74,22 @@ export const ProfilePage: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [emailVerifyLoading, setEmailVerifyLoading] = useState(false);
   const [emailVerifySent, setEmailVerifySent] = useState(false);
+
+  // Profil organisateur backend (mon-profil)
+  const [orgProfil, setOrgProfil] = useState<OrganisateurProfilApi | null>(null);
+  const [orgEmailSent, setOrgEmailSent] = useState(false);
+  const [orgEmailCode, setOrgEmailCode] = useState('');
+  const [orgEmailLoading, setOrgEmailLoading] = useState(false);
+  const [orgEmailConfirming, setOrgEmailConfirming] = useState(false);
+  const [showOrgProfilEdit, setShowOrgProfilEdit] = useState(false);
+  const [orgFormNom, setOrgFormNom] = useState('');
+  const [orgFormCanal, setOrgFormCanal] = useState<'LIGHTNING' | 'LUMICASH'>('LIGHTNING');
+  const [orgFormDestination, setOrgFormDestination] = useState('');
+  const [orgProfilSaving, setOrgProfilSaving] = useState(false);
+
+  // Zone danger : désactivation / réactivation du compte
+  const [deactivating, setDeactivating] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
 
   // Profile Customization States
   const [showPhotoModal, setShowPhotoModal] = useState(false);
@@ -181,6 +203,7 @@ export const ProfilePage: React.FC = () => {
     (async () => {
       try {
         const prof = await api.organisateurs.getMonProfil();
+        if (!cancelled) setOrgProfil(prof);
         const scans = await api.organisateurs.getScanneurs(prof.id);
         if (!cancelled && scans && scans.results) setApiAssignments(scans.results);
       } catch {}
@@ -244,6 +267,107 @@ export const ProfilePage: React.FC = () => {
       setFeedback({ type: 'error', text: parsed.message });
     } finally {
       setEmailVerifyLoading(false);
+      setTimeout(() => setFeedback(null), 4000);
+    }
+  };
+
+  const isOrganizerPersona =
+    user.role === 'ORGANISATEUR' || currentPersona === 'ORGANISATEUR' || currentPersona === 'SUPERADMIN';
+
+  const handleSendOrgEmailCode = async () => {
+    if (orgEmailLoading || orgProfil?.email_verifie) return;
+    setOrgEmailLoading(true);
+    try {
+      await api.organisateurs.demanderVerificationEmailOrganisateur();
+      setOrgEmailSent(true);
+      setFeedback({ type: 'success', text: 'Code de vérification envoyé sur l\'email organisateur (valable 10 minutes).' });
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setFeedback({ type: 'error', text: parsed.message || 'Envoi du code impossible.' });
+    } finally {
+      setOrgEmailLoading(false);
+      setTimeout(() => setFeedback(null), 4000);
+    }
+  };
+
+  const handleConfirmOrgEmailCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (orgEmailConfirming || !orgEmailCode.trim()) return;
+    setOrgEmailConfirming(true);
+    try {
+      const res = await api.organisateurs.confirmerVerificationEmailOrganisateur(orgEmailCode.trim());
+      if (res && res.profil) setOrgProfil({ ...res.profil, email_verifie: true });
+      setOrgEmailCode('');
+      setFeedback({ type: 'success', text: 'Email organisateur vérifié avec succès !' });
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setFeedback({ type: 'error', text: parsed.message || 'Code invalide ou expiré.' });
+    } finally {
+      setOrgEmailConfirming(false);
+      setTimeout(() => setFeedback(null), 4000);
+    }
+  };
+
+  const openOrgProfilEdit = () => {
+    setOrgFormNom(orgProfil?.nom_entreprise || '');
+    setOrgFormCanal((orgProfil?.canal_reception as 'LIGHTNING' | 'LUMICASH') || 'LIGHTNING');
+    setOrgFormDestination(orgProfil?.destination_reception || '');
+    setShowOrgProfilEdit(true);
+  };
+
+  const handleSaveOrgProfil = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (orgProfilSaving) return;
+    setOrgProfilSaving(true);
+    try {
+      const updated = await api.organisateurs.updateMonProfil({
+        nom_entreprise: orgFormNom.trim(),
+        canal_reception: orgFormCanal,
+        destination_reception: orgFormDestination.trim(),
+      });
+      setOrgProfil(updated);
+      setShowOrgProfilEdit(false);
+      setFeedback({ type: 'success', text: 'Paramètres de réception des paiements enregistrés.' });
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setFeedback({ type: 'error', text: parsed.message || 'Enregistrement impossible.' });
+    } finally {
+      setOrgProfilSaving(false);
+      setTimeout(() => setFeedback(null), 4000);
+    }
+  };
+
+  const handleDeactivate = async () => {
+    if (!window.confirm(
+      'Désactiver votre compte ? Vous ne pourrez plus vous connecter vous-même ; la réactivation nécessitera notre assistance.'
+    )) return;
+    setDeactivating(true);
+    try {
+      const res = await api.auth.desactiver();
+      if (res && res.user) updateUserProfile({ statut_compte: res.user.statut_compte });
+      logoutUser();
+      navigate('/');
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setFeedback({ type: 'error', text: parsed.message || 'Désactivation impossible.' });
+      setTimeout(() => setFeedback(null), 4000);
+    } finally {
+      setDeactivating(false);
+    }
+  };
+
+  const handleReactivate = async () => {
+    if (reactivating) return;
+    setReactivating(true);
+    try {
+      const res = await api.auth.reactiver();
+      if (res && res.user) updateUserProfile({ statut_compte: res.user.statut_compte });
+      setFeedback({ type: 'success', text: 'Votre compte a été réactivé avec succès.' });
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setFeedback({ type: 'error', text: parsed.message || 'Réactivation impossible.' });
+    } finally {
+      setReactivating(false);
       setTimeout(() => setFeedback(null), 4000);
     }
   };
@@ -636,6 +760,161 @@ export const ProfilePage: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Vérification email organisateur (code 6 chiffres, validité 10 min) */}
+          {isUserVerified && isOrganizerPersona && !orgProfil?.email_verifie && (
+            <div className="p-3.5 bg-white dark:bg-brand-slate border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2.5 shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-sky-600 text-white shrink-0">
+                  <MailCheck className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                    Vérifiez l'email de votre profil organisateur
+                  </p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug">
+                    Requis pour recevoir les paiements de vos ventes de billets. Un code à 6 chiffres sera envoyé pour 10 minutes.
+                  </p>
+                </div>
+              </div>
+
+              {!orgEmailSent ? (
+                <button
+                  onClick={handleSendOrgEmailCode}
+                  disabled={orgEmailLoading}
+                  className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {orgEmailLoading ? (
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Envoi en cours...</>
+                  ) : (
+                    <><Send className="w-3.5 h-3.5" /> Envoyer le code de vérification</>
+                  )}
+                </button>
+              ) : (
+                <form onSubmit={handleConfirmOrgEmailCode} className="space-y-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={orgEmailCode}
+                    onChange={(e) => setOrgEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="Saisir le code à 6 chiffres"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-sky-600 focus:bg-white transition-colors"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={orgEmailConfirming || orgEmailCode.length < 6}
+                    className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    {orgEmailConfirming ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification en cours...</>
+                    ) : (
+                      <><CheckCircle2 className="w-3.5 h-3.5" /> Confirmer le code</>
+                    )}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+
+          {/* Paramètres de réception des paiements organisateur (updateMonProfil) */}
+          {isUserVerified && isOrganizerPersona && (
+            <div className="p-3.5 bg-white dark:bg-brand-slate border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2.5 shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-2 rounded-lg bg-indigo-600 text-white shrink-0">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                      Paramètres de réception des paiements
+                    </p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug">
+                      Canal {orgProfil?.canal_reception || '—'} • {orgProfil?.destination_reception || 'Aucune destination'}
+                    </p>
+                  </div>
+                </div>
+                <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
+                  orgProfil?.email_verifie
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                }`}>
+                  {orgProfil?.email_verifie ? 'Email vérifié' : 'Email non vérifié'}
+                </span>
+              </div>
+
+              {showOrgProfilEdit ? (
+                <form onSubmit={handleSaveOrgProfil} className="space-y-2.5 pt-1">
+                  <div>
+                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 block mb-1">
+                      Nom de l'entreprise
+                    </label>
+                    <input
+                      type="text"
+                      value={orgFormNom}
+                      onChange={(e) => setOrgFormNom(e.target.value)}
+                      placeholder="Nom de votre structure"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-600 focus:bg-white transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 block mb-1">
+                      Canal de réception
+                    </label>
+                    <select
+                      value={orgFormCanal}
+                      onChange={(e) => setOrgFormCanal(e.target.value as 'LIGHTNING' | 'LUMICASH')}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-600 focus:bg-white transition-colors"
+                    >
+                      <option value="LIGHTNING">Lightning (Bitcoin — Blink)</option>
+                      <option value="LUMICASH">Lumicash</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 block mb-1">
+                      Destination de réception
+                    </label>
+                    <input
+                      type="text"
+                      value={orgFormDestination}
+                      onChange={(e) => setOrgFormDestination(e.target.value)}
+                      placeholder={orgFormCanal === 'LIGHTNING' ? 'ex: vital-o@blink.sv' : 'ex: 79999999'}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-600 focus:bg-white transition-colors"
+                    />
+                  </div>
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowOrgProfilEdit(false)}
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={orgProfilSaving || !orgFormNom.trim() || !orgFormDestination.trim()}
+                      className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-[11px] font-bold text-white shadow-xs flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
+                    >
+                      {orgProfilSaving ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Enregistrement...</>
+                      ) : (
+                        <><Check className="w-3.5 h-3.5" /> Enregistrer</>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openOrgProfilEdit}
+                  className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 border border-indigo-200 cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  Modifier les paramètres de réception
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Appearance & Dark Mode Settings Card */}
@@ -685,6 +964,50 @@ export const ProfilePage: React.FC = () => {
               );
             })}
           </div>
+        </div>
+
+        {/* Zone danger : désactivation / réactivation du compte */}
+        <div className="p-4 bg-white dark:bg-brand-slate border border-rose-200/70 dark:border-rose-900/40 rounded-2xl space-y-3 shadow-sm text-left">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200/60 text-rose-600 shrink-0">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-rose-900 dark:text-rose-100">
+                Zone de sécurité du compte
+              </h4>
+              <p className="text-[10px] text-rose-500 dark:text-rose-400 leading-snug">
+                {user.statut_compte === 'DESACTIVE'
+                  ? 'Votre compte est actuellement désactivé. Vous pouvez le réactiver tant que votre session est active.'
+                  : 'La désactivation est douce (statut DESACTIVE) : connexion et achats bloqués, données conservées. Réactivation via assistance.'}
+              </p>
+            </div>
+          </div>
+          {user.statut_compte === 'DESACTIVE' ? (
+            <button
+              onClick={handleReactivate}
+              disabled={reactivating}
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {reactivating ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Réactivation en cours...</>
+              ) : (
+                <><ArchiveRestore className="w-3.5 h-3.5" /> Réactiver mon compte</>
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={handleDeactivate}
+              disabled={deactivating}
+              className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 disabled:opacity-50 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {deactivating ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Désactivation en cours...</>
+              ) : (
+                <><UserX className="w-3.5 h-3.5" /> Désactiver mon compte</>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Logout Row */}

@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { ChevronLeft, Plus, Minus, Ticket, Info, ArrowRight } from 'lucide-react';
+import { ChevronLeft, Plus, Minus, Ticket, Info, ArrowRight, RefreshCcw } from 'lucide-react';
+import { api } from '../services/apiClient';
+import { ApiTier } from '../types';
 
 export const TicketSelectionPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -13,6 +15,28 @@ export const TicketSelectionPage: React.FC = () => {
   // Maintain local state of selected quantities
   // e.g. { "Pelouse": 2, "VIP": 0 }
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+
+  // Stocks en temps réel via /api/public/evenements/:id/tiers/ (getEvenementTiers)
+  const [liveTiers, setLiveTiers] = useState<ApiTier[] | null>(null);
+  const [tiersLoading, setTiersLoading] = useState(false);
+
+  const loadLiveTiers = async (showSpinner = false) => {
+    if (!id) return;
+    if (showSpinner) setTiersLoading(true);
+    try {
+      const res = await api.public.getEvenementTiers(id);
+      if (res && res.results) setLiveTiers(res.results);
+    } catch {
+      // Backend indisponible → on garde les données du hub
+    } finally {
+      setTiersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadLiveTiers(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   if (!event) {
     return (
@@ -28,6 +52,19 @@ export const TicketSelectionPage: React.FC = () => {
       </div>
     );
   }
+
+  // Fusion : les tiers du backend (stock disponible live) priment sur le cache du hub
+  const displayCategories = liveTiers && liveTiers.length > 0
+    ? liveTiers.map((t) => ({
+        id: t.id,
+        tierId: t.id,
+        name: t.nom,
+        price: Number.parseFloat(t.prix_fbu) || 0,
+        available: t.stock_disponible,
+        stockTotal: t.stock_total,
+        description: undefined as string | undefined,
+      }))
+    : event.ticketCategories;
 
   const handleIncrement = (categoryName: string) => {
     setQuantities((prev) => ({
@@ -49,7 +86,7 @@ export const TicketSelectionPage: React.FC = () => {
 
   // Compute total tickets and price
   const totalQuantity = Object.keys(quantities).reduce((acc, key) => acc + (quantities[key] || 0), 0);
-  const totalPrice = event.ticketCategories.reduce((acc, cat) => {
+  const totalPrice = displayCategories.reduce((acc, cat) => {
     const qty = quantities[cat.name] || 0;
     return acc + qty * cat.price;
   }, 0);
@@ -61,7 +98,7 @@ export const TicketSelectionPage: React.FC = () => {
     clearCart();
 
     // Add all selected items to context cart
-    event.ticketCategories.forEach((cat) => {
+    displayCategories.forEach((cat) => {
       const qty = quantities[cat.name] || 0;
       if (qty > 0) {
         addToCart(event.id, event.title, cat.name, qty, cat.price, cat.id);
@@ -115,13 +152,26 @@ export const TicketSelectionPage: React.FC = () => {
 
         {/* Ticket List Header */}
         <div className="space-y-1">
-          <h3 className="text-sm font-display font-bold text-slate-800 tracking-wide uppercase">Catégories de billets</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-display font-bold text-slate-800 tracking-wide uppercase">Catégories de billets</h3>
+            {liveTiers && liveTiers.length > 0 && (
+              <button
+                onClick={() => void loadLiveTiers(true)}
+                disabled={tiersLoading}
+                className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                title="Stocks mis à jour en temps réel depuis /api/public/evenements/:id/tiers/"
+              >
+                <RefreshCcw className={`w-3 h-3 ${tiersLoading ? 'animate-spin' : ''}`} />
+                Stocks live
+              </button>
+            )}
+          </div>
           <p className="text-xs text-slate-500">Choisissez le nombre de places souhaité pour chaque catégorie.</p>
         </div>
 
         {/* Categories list */}
         <div className="space-y-4">
-          {event.ticketCategories.map((cat, idx) => {
+          {displayCategories.map((cat, idx) => {
             const qty = quantities[cat.name] || 0;
             return (
               <div

@@ -26,7 +26,8 @@ import {
   Search,
   UserPlus,
   Trash2,
-  Loader2
+  Loader2,
+  Edit3
 } from 'lucide-react';
 
 export const OrganizerHubPage: React.FC = () => {
@@ -515,6 +516,14 @@ export const OrganizerHubPage: React.FC = () => {
                         >
                           <QrCode className="w-3.5 h-3.5" />
                           <span>Scanneurs</span>
+                        </button>
+                        <button
+                          onClick={() => navigate(`/organisateur/editer/${evt.id}`)}
+                          className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-200 transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Modifier l'événement, ses niveaux de places ou le supprimer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Modifier</span>
                         </button>
                         <button
                           onClick={() => navigate(`/organisateur/dashboard/${evt.id}`)}

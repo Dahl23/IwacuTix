@@ -1,14 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { Ticket, Calendar, MapPin, ChevronRight, Inbox, Lock, Sparkles, ArrowRight, RefreshCcw, QrCode, User } from 'lucide-react';
+import { Ticket, Calendar, MapPin, ChevronRight, Inbox, Lock, Sparkles, ArrowRight, RefreshCcw, QrCode, User, ShoppingBag, Clock, CheckCircle2, XCircle, Hourglass, Loader2, Wallet } from 'lucide-react';
+import { api } from '../services/apiClient';
+import { ApiCommandeOrder } from '../types';
+
+const COMMANDE_STATUT_META: Record<ApiCommandeOrder['statut'], { label: string; className: string; Icon: typeof Clock }> = {
+  PENDING: { label: 'En attente', className: 'bg-amber-50 text-amber-700 border-amber-200', Icon: Hourglass },
+  SUCCESS: { label: 'Réussie', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', Icon: CheckCircle2 },
+  ECHEC: { label: 'Échec', className: 'bg-rose-50 text-rose-700 border-rose-200', Icon: XCircle },
+  EXPIRE: { label: 'Expirée', className: 'bg-slate-100 text-slate-500 border-slate-200', Icon: Clock },
+};
+
+const CANAL_LABEL: Record<string, string> = {
+  LUMICASH: 'Lumicash',
+  LIGHTNING: 'Lightning',
+  ECOCASH: 'Ecocash',
+  BANCOBU: 'Bancobu',
+  IHELA: 'Ihela',
+};
 
 export const MyTicketsPage: React.FC = () => {
   const navigate = useNavigate();
   const { tickets, isUserVerified, openAuthModal, refreshTicketsFromApi } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'valide' | 'historique'>('valide');
+  const [activeTab, setActiveTab] = useState<'valide' | 'historique' | 'commandes'>('valide');
   const [refreshing, setRefreshing] = useState(false);
+
+  // Commandes (getCommandes - pagifié)
+  const [commandes, setCommandes] = useState<ApiCommandeOrder[]>([]);
+  const [commandesLoading, setCommandesLoading] = useState(false);
+  const [commandesNext, setCommandesNext] = useState<string | null>(null);
+  const [commandesNextLoading, setCommandesNextLoading] = useState(false);
 
   // Recharger les billets depuis /api/tickets/mes-billets/ dès qu'un compte est vérifié
   useEffect(() => {
@@ -23,14 +46,53 @@ export const MyTicketsPage: React.FC = () => {
     };
   }, [isUserVerified, refreshTicketsFromApi]);
 
+  const loadCommandes = async (page?: number, append = false) => {
+    if (!isUserVerified) return;
+    if (append) setCommandesNextLoading(true);
+    else setCommandesLoading(true);
+    try {
+      const res = await api.tickets.getCommandes(page);
+      if (res && res.results) {
+        setCommandes((prev) => (append ? [...prev, ...res.results] : res.results));
+        setCommandesNext(res.next);
+      }
+    } catch {
+      if (!append) setCommandes([]);
+    } finally {
+      if (append) setCommandesNextLoading(false);
+      else setCommandesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'commandes' && isUserVerified) {
+      void loadCommandes();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, isUserVerified]);
+
+  const loadMoreCommandes = () => {
+    if (!commandesNext) return;
+    const url = new URL(commandesNext);
+    const page = Number.parseInt(url.searchParams.get('page') || '2', 10) || 2;
+    void loadCommandes(page, true);
+  };
+
   const userTickets = isUserVerified ? tickets : [];
   const filteredTickets = userTickets.filter((t) =>
     activeTab === 'valide' ? t.status === 'valide' : t.status !== 'valide'
   );
 
-  const formatPrice = (price: number) => {
-    if (price === 0) return 'Gratuit';
-    return `${price.toLocaleString('fr-FR')} FBu`;
+  const formatPrice = (price: number | string) => {
+    const p = typeof price === 'string' ? Number.parseFloat(price) : price;
+    if (p === 0) return 'Gratuit';
+    return `${p.toLocaleString('fr-FR')} FBu`;
+  };
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   return (
@@ -81,6 +143,18 @@ export const MyTicketsPage: React.FC = () => {
             >
               Historique ({userTickets.filter((t) => t.status !== 'valide').length})
             </button>
+
+            <button
+              id="tab-tickets-orders"
+              onClick={() => setActiveTab('commandes')}
+              className={`flex-1 text-center pb-2.5 text-xs font-semibold tracking-wide border-b-2 transition-all cursor-pointer ${
+                activeTab === 'commandes'
+                  ? 'border-orange-500 text-orange-600 dark:text-orange-400 font-bold'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              Mes commandes
+            </button>
           </div>
         )}
       </div>
@@ -89,7 +163,105 @@ export const MyTicketsPage: React.FC = () => {
       <div className="p-4 sm:p-6 flex-1 flex flex-col space-y-4 overflow-y-auto">
         
         {/* CASE 1: USER IS DISCONNECTED */}
-        {!isUserVerified ? (
+        {/* CASE 0: TICKET ORDERS (getCommandes) */}
+        {activeTab === 'commandes' ? (
+          commandesLoading ? (
+            <div className="py-16 text-center flex flex-col items-center justify-center my-auto">
+              <Loader2 className="w-8 h-8 text-orange-500 animate-spin mb-3" />
+              <p className="text-xs font-bold text-slate-500">Chargement de vos commandes...</p>
+            </div>
+          ) : !isUserVerified ? (
+            <div className="py-16 text-center my-auto flex flex-col items-center justify-center max-w-sm mx-auto">
+              <div className="p-5 rounded-3xl bg-slate-100 text-slate-400 mb-4 border border-slate-200">
+                <Lock className="w-10 h-10" />
+              </div>
+              <h3 className="text-base font-display font-bold text-slate-800">Connexion requise</h3>
+              <p className="text-xs text-slate-500 mt-1 text-center leading-relaxed">
+                Connectez-vous pour consulter l'historique de vos commandes de billets.
+              </p>
+              <button
+                onClick={() => openAuthModal('GENERAL')}
+                className="mt-6 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-orange-500/20 cursor-pointer active:scale-95 transition-all"
+              >
+                Se connecter
+              </button>
+            </div>
+          ) : commandes.length === 0 ? (
+            <div className="py-16 text-center my-auto flex flex-col items-center justify-center max-w-sm mx-auto">
+              <div className="p-5 rounded-3xl bg-slate-100 text-slate-400 mb-4 border border-slate-200">
+                <ShoppingBag className="w-10 h-10" />
+              </div>
+              <h3 className="text-base font-display font-bold text-slate-800">Aucune commande</h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed text-center">
+                Vous n'avez pas encore passé de commande. Achetez un billet pour la voir apparaître ici.
+              </p>
+              <button
+                onClick={() => navigate('/home')}
+                className="mt-6 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-orange-500/20 cursor-pointer active:scale-95 transition-all"
+              >
+                Découvrir les événements
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {commandes.map((cmd) => {
+                const meta = COMMANDE_STATUT_META[cmd.statut] || COMMANDE_STATUT_META.PENDING;
+                const StatutIcon = meta.Icon;
+                return (
+                  <div
+                    key={cmd.id}
+                    className="p-4 bg-white dark:bg-brand-card border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm space-y-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-display font-bold text-sm text-slate-900 dark:text-white truncate">
+                          {cmd.event_titre}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          ID : {cmd.id.slice(0, 8)} • {cmd.tiers_lib} × {cmd.quantite}
+                        </p>
+                      </div>
+                      <span className={`text-[9px] font-mono font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-wider shrink-0 inline-flex items-center gap-1 ${meta.className}`}>
+                        <StatutIcon className="w-3 h-3" />
+                        {meta.label}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px]">
+                      <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
+                        <span className="inline-flex items-center gap-1">
+                          <Wallet className="w-3.5 h-3.5" />
+                          {CANAL_LABEL[cmd.moyen_paiement] || cmd.moyen_paiement}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" />
+                          {formatDate(cmd.date_creation)}
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">
+                        {formatPrice(cmd.montant_fbu)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {commandesNext && (
+                <button
+                  onClick={loadMoreCommandes}
+                  disabled={commandesNextLoading}
+                  className="w-full py-3 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-50 border border-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {commandesNextLoading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Chargement...</>
+                  ) : (
+                    <><ChevronRight className="w-4 h-4 rotate-90" /> Charger les commandes suivantes</>
+                  )}
+                </button>
+              )}
+            </div>
+          )
+        ) : !isUserVerified ? (
           <div className="py-12 sm:py-20 text-center my-auto flex flex-col items-center justify-center max-w-md mx-auto px-4">
             <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-3xl bg-gradient-to-tr from-orange-500/20 via-amber-500/15 to-orange-500/10 border border-orange-500/30 flex items-center justify-center mb-5 shadow-lg shadow-orange-500/10">
               <Ticket className="w-9 h-9 sm:w-10 sm:h-10 text-orange-500 rotate-12" />
