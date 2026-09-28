@@ -1,7 +1,6 @@
 import { 
   ApiAuthResponse, 
   ApiUser,
-  ApiCommandePayload, 
   ApiCommandeResponse, 
   ApiCommandeOrder, 
   ApiEvenementPublic, 
@@ -41,25 +40,10 @@ export const getApiBaseUrl = (): string => {
   ).replace(/\/+$/, '');
 };
 
-export const setApiBaseUrl = (newUrl: string): void => {
-  if (typeof window !== 'undefined') {
-    if (!newUrl || !newUrl.trim()) {
-      localStorage.removeItem('iwacutix_api_base_url');
-    } else {
-      localStorage.setItem('iwacutix_api_base_url', newUrl.trim().replace(/\/+$/, ''));
-    }
-  }
-};
-
 export const API_BASE_URL = getApiBaseUrl();
 
 const ACCESS_TOKEN_KEY = 'iwacutix_access_token';
 const REFRESH_TOKEN_KEY = 'iwacutix_refresh_token';
-
-// État de connexion détecté
-let isBackendLive: boolean | null = null;
-
-export const getApiConnectionStatus = (): boolean | null => isBackendLive;
 
 // Gestion du stockage des jetons JWT
 export const getStoredAccessToken = (): string | null => {
@@ -132,7 +116,6 @@ async function request<T>(
     });
 
     clearTimeout(timeoutId);
-    isBackendLive = true;
 
     // Gestion du 401 JWT et rafraîchissement ROTATE_REFRESH_TOKENS
     // Les endpoints publics d'authentification (login, register, password-reset) ne doivent
@@ -226,7 +209,6 @@ async function request<T>(
 
     // Si le serveur distant ne répond pas (cold start ou hors-ligne)
     if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
-      isBackendLive = false;
       console.warn(`[IwacuTix API] Backend ${baseUrl} momentanément inaccessible.`);
       throw {
         error: `Impossible de contacter le serveur backend (${baseUrl}). Vérifiez la connexion ou réessayez dans quelques secondes.`,
@@ -236,17 +218,6 @@ async function request<T>(
 
     throw err;
   }
-}
-
-/**
- * Repli hors-ligne : ne fabrique JAMAIS de données de test.
- * Toute requête non aboutie remonte une erreur backend_indisponible réelle.
- */
-function rejectBackendUnavailable<T>(_endpoint: string, _options: RequestInit): Promise<T> {
-  throw {
-    error: 'Backend momentanément indisponible. Réessayez dans quelques secondes (démarrage Render).',
-    code: 'backend_indisponible',
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -270,13 +241,6 @@ export const api = {
       request<ApiAuthResponse>('/api/auth/login/', {
         method: 'POST',
         body: JSON.stringify({ identifiant, password }),
-      }),
-
-    // 1.3 Rafraîchir les jetons JWT (rotation + BLACKLIST_AFTER_ROTATION: l'ancien refresh est révoqué)
-    refreshToken: (refresh: string) =>
-      request<{ access: string; refresh: string }>('/api/auth/token/refresh/', {
-        method: 'POST',
-        body: JSON.stringify({ refresh }),
       }),
 
     // 1.4 Profil utilisateur connecté (UserSerializer inclut username, email_verifie)
@@ -338,10 +302,7 @@ export const api = {
       request<any>('/api/auth/me/photo-profil/', {
         method: 'DELETE',
       }),
-
-    // Déconnexion locale
-    logout: () => clearStoredTokens(),
-  },
+    },
 
   // 2. Organisateurs (Section 2)
   organisateurs: {
@@ -541,13 +502,6 @@ export const api = {
       moyen_paiement: 'LIGHTNING';
       destinataires?: ApiDestinataireBillet[];
     }) =>
-      request<ApiCommandeResponse>('/api/tickets/commandes/', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      }),
-
-    // Alias pour compatibilité
-    creerCommande: (payload: ApiCommandePayload) =>
       request<ApiCommandeResponse>('/api/tickets/commandes/', {
         method: 'POST',
         body: JSON.stringify(payload),

@@ -47,6 +47,7 @@ interface AppContextType {
   orderDrafts: OrderDraft[];
   setOrderDrafts: React.Dispatch<React.SetStateAction<OrderDraft[]>>;
   refreshTicketsFromApi: () => Promise<void>;
+  loadPublicEvents: () => Promise<void>;
   tickets: TicketPurchased[];
   events: Event[];
   searchQuery: string;
@@ -527,6 +528,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         orderDrafts,
         setOrderDrafts,
         refreshTicketsFromApi,
+        loadPublicEvents,
         tickets,
         events,
         searchQuery,

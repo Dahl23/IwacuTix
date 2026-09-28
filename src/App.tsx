@@ -12,6 +12,7 @@ import { MyTicketsPage } from './pages/MyTicketsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SearchPage } from './pages/SearchPage';
 import { CreateEventPage } from './pages/CreateEventPage';
+import { EditEventPage } from './pages/EditEventPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { OrganizerHubPage } from './pages/OrganizerHubPage';
 import { OrganizerKycPage } from './pages/OrganizerKycPage';
@@ -81,6 +82,9 @@ function AppRoutes() {
 
           {/* 9. Partner Event Sales & Ticket Scanning Dashboard for a specific event */}
           <Route path="/organisateur/dashboard/:id" element={<DashboardPage />} />
+
+          {/* 9.b Partner Event Editing (informations + niveaux de places + suppression) */}
+          <Route path="/organisateur/editer/:id" element={<EditEventPage />} />
 
           {/* 10. Specialized Access Control & Ticket Scanner (Section 4 & 8) */}
           <Route path="/scan" element={<ScannerPage />} />
